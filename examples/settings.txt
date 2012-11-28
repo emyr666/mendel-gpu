@@ -15,6 +15,7 @@ PLATFORM_ID 0
 DEVICE_ID 1
 INFILE_REFHAP rawinput/out.haplotype.data
 INFILE_GENO_DIM 3 # set this to 4 for phased input, 3 for unphased
+INFILE_HAPLOID 0 # 0 = diploid (autosomes, female X) or 1=haploid(maleX)
 INFILE_GENO rawinput/genotype.stream
 OUTFILE_FORMAT default 
 OUTFILE_POSTERIOR rawoutput/POSTERIORS

@@ -7,7 +7,7 @@ fi
 chr=$1
 mincounts=$2
 regionsize=$3
-
+haploid=0
 
 cd $IMPUTATION_DATA
 echo Unzipping raw data
@@ -17,7 +17,7 @@ echo Pruning rare SNPs
 prune_kgp_file.pl $mincounts temp.legend temp.hap $chr'.legend' $chr'.hap'
 rm -f $KGP_DIR'/'*'.chr'$chr'.part'*'.gz'
 echo Splitting into regions
-split_file.pl $KGP_DIR'/hap.chr'$chr'.part' $regionsize 0 < $chr'.hap'
+split_file.pl $KGP_DIR'/hap.chr'$chr'.part' $regionsize 0 $haploid< $chr'.hap'
 gzip -f $KGP_DIR'/hap.chr'$chr'.part'*
-split_file.pl $KGP_DIR'/legend.chr'$chr'.part' $regionsize 1 < $chr'.legend'
+split_file.pl $KGP_DIR'/legend.chr'$chr'.part' $regionsize 1 $haploid< $chr'.legend'
 gzip -f $KGP_DIR'/legend.chr'$chr'.part'*

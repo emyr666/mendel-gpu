@@ -10,6 +10,7 @@ __constant int * region_snp_offset,
 __constant int * markers,
 __constant int * haplotypes,
 __constant int * left_marker,
+__global int * haploid_arr,
 __global packedhap_t * packedhap,
 __global int * haplotype,
 __global float * region_snp_penetrance,
@@ -24,6 +25,7 @@ __local float * local_snp_penetrance,
 __local float * local_max_penetrance
 ) {
   int subject = get_group_id(0);
+  int haploid = haploid_arr[subject];
   int threadindex = get_local_id(0);
   for(int chunk=0;chunk<(markers[0]/BLOCK_WIDTH)+1;++chunk){
     int markerindex = chunk*BLOCK_WIDTH+threadindex;
@@ -50,7 +52,8 @@ __local float * local_max_penetrance
   for(int righthapindex=0;righthapindex<haplotypes[0];++righthapindex){
     for(int chunk=0;chunk<(haplotypes[0]/BLOCK_WIDTH)+1;++chunk){
       int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
-      if (lefthapindex<haplotypes[0]){
+      if (lefthapindex<haplotypes[0] && (!haploid || 
+      lefthapindex==righthapindex)){
         float logpenetrance = 0;
         for(int windowmarker=0;windowmarker<markers[0];++windowmarker){
           int geno = (((int)local_packedhap[righthapindex*packedhap_len+(windowmarker/32)].octet[(windowmarker%32)/8]) >> ((windowmarker%32)%8) & 1) + (((int)local_packedhap[lefthapindex*packedhap_len+(windowmarker/32)].octet[(windowmarker%32)/8]) >> ((windowmarker%32)%8) & 1) ;
@@ -72,7 +75,8 @@ __local float * local_max_penetrance
   for(int righthapindex=0;righthapindex<haplotypes[0];++righthapindex){
     for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
       int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
-      if (lefthapindex<haplotypes[0]){
+      if (lefthapindex<=haplotypes[0] && (!haploid || 
+      lefthapindex==righthapindex)){
         float rescaled = logpenetrance_cache[subject*penetrance_matrix_size+righthapindex*max_haplotypes+lefthapindex]-local_max_penetrance[0];
         logpenetrance_cache[subject*penetrance_matrix_size+righthapindex*max_haplotypes+lefthapindex] = rescaled;
         penetrance_cache[subject*penetrance_matrix_size+righthapindex*max_haplotypes+lefthapindex] = rescaled>=logpenetrance_threshold?exp(rescaled):0;
@@ -193,6 +197,7 @@ __constant int * genotype_imputation,
 __constant int * haplotypes,
 __constant int * extended_haplotypes,
 __constant int * last_site,
+__global int * haploid_arr,
 __global int * extended_root_mapping,
 __global float * extended_frequency,
 __global float * penetrance_cache,
@@ -213,6 +218,7 @@ __local float * local_cached_marginals,
 __local float * local_denom
 ) {
   int subject = get_group_id(0);
+  int haploid = haploid_arr[subject];
   int packedsite = get_group_id(1);
   int threadindex = get_local_id(0);
   for(int chunk=0;chunk<(extended_haplotypes[0]/BLOCK_WIDTH_IMPUTE_GUIDE)+1;++chunk){
@@ -247,7 +253,9 @@ __local float * local_denom
       for(int chunk=0;chunk<(extended_haplotypes[0]/BLOCK_WIDTH_IMPUTE_GUIDE)+1;++chunk){
         int lefthapindex = chunk*BLOCK_WIDTH_IMPUTE_GUIDE+threadindex;
         //if (lefthapindex<=righthapindex ){
-        if (lefthapindex<=righthapindex && local_cached_marginals[local_root_mapping[lefthapindex]]>0){
+        if ((!haploid || local_root_mapping[lefthapindex]==
+        local_root_mapping[righthapindex]) && lefthapindex<=righthapindex && 
+        local_cached_marginals[local_root_mapping[lefthapindex]]>0){
           // penetrance only needs to be fetched once as it doesn't change 
           // across sites
           //float penetrance = .5;

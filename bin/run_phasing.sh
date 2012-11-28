@@ -10,13 +10,25 @@ chr=$2
 chunk_start=$3
 chunk_end=$4
 
+#infile_haploid=0
+#if [[ $chr == 'X' && $all_male == '1' ]] ; then
+#   echo Haploid inputfile
+#   infile_haploid=1
+#fi
+is_sex_chr=0
+if [[ $chr == 'X' ]] ; then
+  is_sex_chr=1
+fi
+
+
+
+mkdir -p  $IMPUTATION_DATA'/'$dbname'_phased'
+
 maxpart=20
-ln -fs $IMPUTATION_SOFTWARE/src/kernels.c 
 for((chunk=$chunk_start;chunk<=$chunk_end;++chunk))
 do
+  cp $IMPUTATION_DATA'/'$dbname'/sex.chunk.'$chunk sex
   basefile=$IMPUTATION_DATA'/'$dbname'/chr.'$chr'.chunk.'$chunk
-  #gunzip -c -v $basefile'.gz' | split_file.pl $basefile'.part' 10000 0
-  #gzip -v -f $basefile'.part'*
   for((part=1;part<=$maxpart;++part))
   do
     if [[ -f $IMPUTATION_DATA'/'$dbname'/chr.'$chr'.chunk.'$chunk'.part'$part'.gz' && ! -f $IMPUTATION_DATA'/'$dbname'_phased/results/phasing.chr'$chr'.part'$part'.chunk'$chunk'.gz' ]] ; then
@@ -35,7 +47,7 @@ do
         let total_regions=$total_regions+1
       fi
       #echo $people $snps $total_regions $remainder
-      cat settings.phasing | sed "s/people/$people/" | sed "s/snps/$snps/" | sed "s/total_regions/$total_regions/" > settings.txt
+      cat settings.phasing | sed "s/people/$people/" | sed "s/snps/$snps/" | sed "s/total_regions/$total_regions/" | sed "s/is_sex_chr/$is_sex_chr/" > settings.txt
       echo Beginning phasing
       impute 1>impute.out 2>impute.debug
       # post process files

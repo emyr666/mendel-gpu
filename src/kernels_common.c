@@ -22,10 +22,10 @@ __constant int * genotype_imputation,
 __constant int * markers,
 __constant int * haplotypes,
 __constant int * left_marker,
+__global int * haploid_arr,
 __global int * haplotype,
 __global float * snp_penetrance,
 __global float * frequency,
-//__global float * frequency_cache,
 __global float * penetrance_cache,
 __global float * subject_haplotype_weight,
 __global int * active_haplotype,
@@ -37,6 +37,7 @@ __local float * local_penetrance_block,
 __local float * local_likelihood
 ) {
   int subject = get_group_id(0);
+  int haploid = haploid_arr[subject];
   int threadindex = get_local_id(0);
   // INITIALIZE HAPLOTYPE SPECIFIC VARIABLES
   for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
@@ -61,15 +62,14 @@ __local float * local_likelihood
   for(int righthapindex=0;righthapindex<max_haplotypes;++righthapindex){
     if (local_active_haplotype[righthapindex] && 
     (iteration[0]==1 || local_cached_marginals[righthapindex]>0)){
-    //if (local_active_haplotype[righthapindex]){
       local_penetrance_block[threadindex] = 0;
       for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
         int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
         if (lefthapindex<=righthapindex&&local_active_haplotype[lefthapindex]
         &&(iteration[0]==1||local_cached_marginals[lefthapindex]>0)){
-        //if (lefthapindex<=righthapindex&&local_active_haplotype[lefthapindex]){
-          float penetrance = penetrance_cache[subject*penetrance_matrix_size+
-          righthapindex*max_haplotypes+lefthapindex];
+          float penetrance = (!haploid || lefthapindex==righthapindex) ?
+          penetrance_cache[subject*penetrance_matrix_size+
+          righthapindex*max_haplotypes+lefthapindex]: 0;
           if (penetrance>0){
             float prob = (lefthapindex!=righthapindex)?
             local_frequency[lefthapindex]*

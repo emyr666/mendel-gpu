@@ -1,3 +1,4 @@
+using namespace std;
 #include<iostream>
 #include<fstream>
 #include<sstream>
@@ -17,7 +18,6 @@
 #endif
 #include"mendel_gpu.hpp"
 
-using namespace std;
 
 void MendelGPU::double_haplotypes_(){
   cerr<<"Entering double_haplotypes\n";
@@ -145,10 +145,10 @@ void MendelGPU::precompute_penetrance_fast_(){
   int prev_left_marker = g_prev_left_marker[0]-1;
   int left_marker = g_left_marker[0]-1;
   cerr<<"Taking hap doses at site "<<last_marker<<" and prev and current left marker: "<<prev_left_marker<<","<<left_marker<<"\n";
-  bool debug_penmat = false;
-  //bool debug_penmat = g_markers[0]>4;
   int debug_penmat_person = 250;
-  //bool debug_penmat = g_haplotypes[0]<-8;
+  //bool debug_penmat = false;
+  bool debug_penmat = g_markers[0]<-40;
+  //bool debug_penmat = g_haplotypes[0]>2;
   if (debug_penmat) cout<<"Debugging precompute_penetrance_fast_()\n";
   for(int j=0;j<g_max_haplotypes;++j){
     if(g_active_haplotype[j] ){
@@ -213,6 +213,7 @@ void MendelGPU::precompute_penetrance_fast_(){
   if(run_cpu){
     double start = clock();
     for(int i=0;i<g_people;++i){
+      int haploid = haploid_arr[i];
       float maxlog = -1e10;
       for(int j=0;j<g_max_haplotypes;++j){
         if(g_active_haplotype[j] ){
@@ -247,7 +248,7 @@ void MendelGPU::precompute_penetrance_fast_(){
             }
           }else{
             for(int k=j;k<g_max_haplotypes;++k){
-              if(g_active_haplotype[k]){
+              if(g_active_haplotype[k] && (!haploid || k==j)){
                 int dose= right_edge_dosage[j] + right_edge_dosage[k];
                 float logpenetrance_new = g_region_snp_penetrance[i*(geno_dim*
                 g_max_region_size)+ geno_dim*(left_marker+last_marker-
@@ -270,7 +271,6 @@ void MendelGPU::precompute_penetrance_fast_(){
           }
         } 
       }
-//maxlog = 0;
       for(int j=0;j<g_max_haplotypes;++j){
         if (g_active_haplotype[j] ){
           if (geno_dim==4){
@@ -280,11 +280,10 @@ void MendelGPU::precompute_penetrance_fast_(){
               logpenetrance_cache[i*2*g_max_haplotypes+2*j+parent] = val;
               penetrance_cache[i*2*g_max_haplotypes+2*j+parent] = 
               val>=logpenetrance_threshold?exp(val):0;
-              //if (g_haplotypes[0]>6 && i==0) cerr<<"Log penetrance/penetrance for person "<<i<<" hap "<<j<<" parent "<<parent<<": "<<val<<"/"<<penetrance_cache[i*2*g_max_haplotypes+2*j+parent] <<endl;
             }
           }else{
             for(int k=j;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k]){
+              if (g_active_haplotype[k] && (!haploid || k==j)){
                 float val = logpenetrance_cache[i*penetrance_matrix_size+j*
                 g_max_haplotypes+k]-maxlog;
                 logpenetrance_cache[i*penetrance_matrix_size+j*
@@ -700,11 +699,11 @@ void MendelGPU::impute_diploid_genotypes_denovo_(int * center_snp, int * d_snp){
         for(int j=0;j<max_geno;++j){
           denom+=subject_posterior[i*4+j];
         }
-        if(debug_mode) ofs_posterior_file<<"GPU_POSTERIOR\t"<<i<<"\t"<<current_snp;
+        cout<<"GPU_POSTERIOR\t"<<i<<"\t"<<current_snp;
         for(int j=0;j<max_geno;++j){
-          if(debug_mode) ofs_posterior_file<<"\t"<< subject_posterior[i*4+j]/denom;
+          cout<<"\t"<< subject_posterior[i*4+j];
         }
-        if(debug_mode) ofs_posterior_file<<endl;
+        cout<<endl;
         if (denom<epsilon){
           //cerr<<"DENOM < EPSILON\n";
           if (denom==0){
@@ -774,34 +773,35 @@ void MendelGPU::impute_diploid_genotypes_denovo_(int * center_snp, int * d_snp){
       ofs_posterior_file<<current_snp;
     }
     for(int i=0;i<g_people;++i){
-      bool debug_truth = false;
-      //bool debug_truth = (i==14) && (current_snp==0);
+      int haploid = haploid_arr[i];
       float best_prob = 0;
       float posterior_prob[4];
       int best_pair[2];
       memset(posterior_prob,0,sizeof(float)*4);
       for(int j=0;j<g_max_haplotypes;++j){
-        for(int k=j;k<g_max_haplotypes;++k){
-          if(g_active_haplotype[j] && g_active_haplotype[k]){
-            int m;
-            float penetrance = penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
-            //cerr<<"Penetrance at "<<j<<" and "<<k<<" :" <<penetrance<<endl;
-            if (penetrance>0){
-              float freq = g_frequency[j]*g_frequency[k];
-              if (j!=k) freq*=2;
-              float p = freq*penetrance;
-              if (p>best_prob){
-                best_prob = p;
-                best_pair[0] = j;
-                best_pair[1] = k;
+        if(g_active_haplotype[j] ){
+          for(int k=j;k<g_max_haplotypes;++k){
+            if(g_active_haplotype[k] && (haploid || j==k)){
+              int m;
+              float penetrance = penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
+              //cerr<<"Penetrance at "<<j<<" and "<<k<<" :" <<penetrance<<endl;
+              if (penetrance>0){
+                float freq = g_frequency[j]*g_frequency[k];
+                if (j!=k) freq*=2;
+                float p = freq*penetrance;
+                if (p>best_prob){
+                  best_prob = p;
+                  best_pair[0] = j;
+                  best_pair[1] = k;
+                }
+                if(g_genotype_imputation){
+                  m = center_dosage[j] + center_dosage[k];
+                }else{
+                  m = 2*center_dosage[j] + center_dosage[k];
+                }
+                if (debug_pen) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
+                posterior_prob[m]+=p;
               }
-              if(g_genotype_imputation){
-                m = center_dosage[j] + center_dosage[k];
-              }else{
-                m = 2*center_dosage[j] + center_dosage[k];
-              }
-              if (debug_pen) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
-              posterior_prob[m]+=p;
             }
           }
         }
@@ -876,28 +876,6 @@ void MendelGPU::impute_diploid_genotypes_denovo_(int * center_snp, int * d_snp){
             geno2 = h;
           }
         }  
-        if (debug_truth){
-          int truegeno = true_geno[i*g_snps+current_snp];
-          float truemaf = true_maf[current_snp];
-          if ((truegeno!=geno2 || truegeno!=geno1) && truemaf<.01){
-            cerr<<"Mismatch at person "<<i<<" SNP "<<current_snp<<endl;
-            cerr<<"True geno, geno1, geno2: "<<truegeno<<","<<geno1<<","<<geno2<<endl;
-            cerr<<"bestpair: "<<best_pair[0]<<","<<best_pair[1]<<endl;
-            cerr<<"hap1,hap2:pen,freq,genotype\n";
-            for(int j=0;j<g_max_haplotypes;++j){
-              int start = g_genotype_imputation?j:0;
-              for(int k=start;k<g_max_haplotypes;++k){
-                if(g_active_haplotype[j] && g_active_haplotype[k]){
-                  int m = g_haplotype[j*g_max_window+ c_snp] + 
-                  g_haplotype[k*g_max_window+ c_snp];
-                  float logpenetrance = logpenetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
-                  float freq = g_frequency[j]*g_frequency[k];
-                  cerr<<j<<","<<k<<":"<<logpenetrance<<","<<freq<<","<<m<<endl;
-                }
-              }
-            }
-          }
-        }
         if (debug_geno){
           cout<<"CPU GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<geno1<<","<<geno2<<endl;
         }

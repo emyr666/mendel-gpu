@@ -1,3 +1,4 @@
+using namespace std;
 #include<iostream>
 #include<fstream>
 #include<sstream>
@@ -17,7 +18,6 @@
 #endif
 #include"mendel_gpu.hpp"
 
-using namespace std;
 
 void MendelGPU::parse_ref_haplotype(){
   string line;
@@ -219,6 +219,7 @@ void MendelGPU::precompute_penetrance_(){
   if(run_cpu){
     double start = clock();
     for(int i=0;i<g_people;++i){
+      int haploid = haploid_arr[i];
       float maxlog = -1000;
       for(int j=0;j<g_max_haplotypes;++j){
         if (g_active_haplotype[j]){
@@ -255,7 +256,7 @@ void MendelGPU::precompute_penetrance_(){
             }
           }else{
             for(int k=0;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k]){
+              if (g_active_haplotype[k] && (!haploid || j==k)){
                 decompress(k,g_markers[0],g_haplotype);
                 float logpenetrance = 0;
                 for(int l=0;l<g_markers[0];++l){
@@ -287,7 +288,7 @@ void MendelGPU::precompute_penetrance_(){
             }
           }else{
             for(int k=0;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k]){
+              if (g_active_haplotype[k] && (!haploid || j==k)){
                 float val = logpenetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k]-maxlog;
                 logpenetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k] = val;
                 penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k] = val>=logpenetrance_threshold?exp(val):0;
@@ -531,32 +532,36 @@ int * center_snp_end, int * center_snp_offset){
     memset(subject_posterior_prob,0,sizeof(float)*g_people*g_flanking_snps * 4);
     double start = clock();
     for(int i=0;i<g_people;++i){
+      int haploid = haploid_arr[i];
       for(int j=0;j<extended_haplotypes;++j){
-        //decompress(j,extended_markers,extended_haplotype);
-        for(int k=j;k<extended_haplotypes;++k){
-          if(subject_haplotype_weight[i*g_max_haplotypes+
-          extended_root_mapping[j]]>0 && subject_haplotype_weight[
-          i*g_max_haplotypes+extended_root_mapping[k]]>0){ 
-            //decompress(k,extended_markers,extended_haplotype);
-            float penetrance =
-            penetrance_cache[i*penetrance_matrix_size+extended_root_mapping[j]*
-            g_max_haplotypes+extended_root_mapping[k]];
-            if (penetrance>0){
-              for(int c_snp = c_snp_start;c_snp<c_snp_end; ++c_snp){
-                int packedsite = c_snp - c_snp_start;
-                int current_snp = c_snp_offset + c_snp;
-                int m;
-                if(g_genotype_imputation){
-                  m = (((int)packedextendedhap[j*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)packedextendedhap[k*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) ;
-                }else{
-                  m = 2*(((int)packedextendedhap[j*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)packedextendedhap[k*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) ;
+        if(subject_haplotype_weight[i*g_max_haplotypes+
+          extended_root_mapping[j]]>0){ 
+          //decompress(j,extended_markers,extended_haplotype);
+          for(int k=j;k<extended_haplotypes;++k){
+            if((!haploid ||  extended_root_mapping[j] == 
+            extended_root_mapping[k]) && subject_haplotype_weight[i*
+            g_max_haplotypes+extended_root_mapping[k]]>0){ 
+              //decompress(k,extended_markers,extended_haplotype);
+              float penetrance =
+              penetrance_cache[i*penetrance_matrix_size+extended_root_mapping[j]*
+              g_max_haplotypes+extended_root_mapping[k]];
+              if (penetrance>0){
+                for(int c_snp = c_snp_start;c_snp<c_snp_end; ++c_snp){
+                  int packedsite = c_snp - c_snp_start;
+                  int current_snp = c_snp_offset + c_snp;
+                  int m;
+                  if(g_genotype_imputation){
+                    m = (((int)packedextendedhap[j*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)packedextendedhap[k*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) ;
+                  }else{
+                    m = 2*(((int)packedextendedhap[j*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)packedextendedhap[k*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) ;
+                  }
+                  float freq = extended_frequency[j]*extended_frequency[k];
+                  if (j!=k) freq*=2;
+                  float p = freq*penetrance;
+                  //p = 1;
+                  subject_posterior_prob[i*g_flanking_snps*4+(packedsite)*4+m]+=p;
+                  if (debug_pen) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
                 }
-                float freq = extended_frequency[j]*extended_frequency[k];
-                if (j!=k) freq*=2;
-                float p = freq*penetrance;
-                //p = 1;
-                subject_posterior_prob[i*g_flanking_snps*4+(packedsite)*4+m]+=p;
-                if (debug_pen) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
               }
             }
           }

@@ -31,9 +31,12 @@ private:
   float epsilon;
   static const int HAPLOTYPE_MODE_DENOVO = 0;
   static const int HAPLOTYPE_MODE_GUIDE = 1;
+  static const int LIKELIHOOD_MODE_GENOTYPES = 0;
+  static const int LIKELIHOOD_MODE_READS = 1;
   float logpenetrance_threshold;
   const char * imputation_software;
   int g_haplotype_mode;
+  int g_likelihood_mode;
   bool debug_mode;
   bool run_gpu;
   bool run_cpu;
@@ -85,9 +88,12 @@ private:
   int * true_geno;
   int geno_dim;
   float * true_maf;
+  int * haploid_arr;
+  bool is_sex_chr;
   string FORMAT_DEFAULT;
   string FORMAT_MEC;
   string infile_refhap;
+  string infile_sex;
   string infile_geno;
   string outfile_format;
   string outfile_geno;
@@ -166,6 +172,7 @@ private:
   cl::Buffer * buffer_packedhap;
   cl::Buffer * buffer_packedextendedhap;
   cl::Buffer * buffer_iteration;
+  cl::Buffer * buffer_haploid_arr;
   #endif
   
   struct hapobj_t{

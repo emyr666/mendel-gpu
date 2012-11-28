@@ -1,3 +1,4 @@
+using namespace std;
 #include<iostream>
 #include<fstream>
 #include<sstream>
@@ -17,7 +18,6 @@
 #endif
 #include"mendel_gpu.hpp"
 
-using namespace std;
 
 MendelGPU::MendelGPU(){
   epsilon = 1e-10;
@@ -28,6 +28,7 @@ MendelGPU::MendelGPU(){
   run_gpu = true;
   run_cpu = false;
   debug_truth = false;
+#ifdef USE_GPU
   commandQueue = NULL;
   context = NULL;
   program = NULL;
@@ -76,6 +77,7 @@ MendelGPU::MendelGPU(){
   buffer_beyond_left_edge_dosage = NULL;
   buffer_right_edge_dosage = NULL;
   buffer_center_dosage = NULL;
+#endif
 }
 
 MendelGPU::~MendelGPU(){
@@ -201,6 +203,7 @@ void MendelGPU::load_constants_(int * model, int * people,int * snps, int * tota
     string tag;
     string strval;
     iss>>tag;
+    g_likelihood_mode = LIKELIHOOD_MODE_GENOTYPES;
     if (tag.compare("PEOPLE")==0){
       iss>>people[0];
     }else if (tag.compare("BINARY_SNPS")==0){
@@ -236,6 +239,16 @@ void MendelGPU::load_constants_(int * model, int * people,int * snps, int * tota
 //      iss>>kernel_path;
     }else if (tag.compare("INFILE_REFHAP")==0){
       iss>>infile_refhap;
+    }else if (tag.compare("INFILE_SEX")==0){
+      iss>>infile_sex;
+    }else if (tag.compare("IS_SEX_CHR")==0){
+      iss>>is_sex_chr;
+    }else if (tag.compare("INFILE_GENO_FILEFORMAT")==0){
+      string format;
+      iss>>format;
+      if (format.compare("bam")==0){
+        g_likelihood_mode = LIKELIHOOD_MODE_READS;
+      }
     }else if (tag.compare("INFILE_GENO")==0){
       iss>>infile_geno;
     }else if (tag.compare("INFILE_GENO_DIM")==0){
@@ -408,23 +421,44 @@ void MendelGPU::read_stream_(int * people, int * snps, float * snp_penetrance){
     for(int i=0;i< total_persons;++i){
       for(int k=0;k<geno_dim;++k){
         float logpen = snp_penetrance[i * floatlen + j * geno_dim + k];
-        //cerr<<"i,j,k,pen "<<i<<","<<j<<","<<k<<":"<<pen<<endl;
         if (logpen>max_logpen) max_logpen = logpen;
       }
     }
-    //cerr<<"max log pen for snp "<<j<<" is "<<max_logpen<<endl;
     informative_snp[j] = (max_logpen-logpen_threshold)>.01;
     if (informative_snp[j]) cerr<<" "<<j;
   }
   cerr<<endl;
-  //for(int i=0;i<6;++i){
-  //  cerr<<"debug: "<<snp_penetrance[i]<<endl;
-  //}
-  //exit(0);
-
+  // Also take this opportunity to read in the person meta data
+  cerr<<"Total persons "<<total_persons<<endl;
+  haploid_arr = new int[total_persons];
+  for(int i=0;i<total_persons;++i) haploid_arr[i] = 0;
+  ifstream ifs_person;
+  ifs_person.open(infile_sex.data());
+  if (!ifs_person.is_open()){
+    cerr <<"WARNING: Cannot find the person sex file "<<infile_sex<<". Assuming all females\n";
+  }else{
+    string line;
+    getline(ifs_person,line);
+    int person=0;
+    int haploids = 0;
+    for(int person = 0; person<total_persons;++person){
+      getline(ifs_person,line);
+      istringstream iss(line);
+      int seq;
+      char sex;
+      iss>>seq>>sex;
+      if (is_sex_chr && sex=='M') {
+        haploid_arr[person] = 1;
+        ++haploids;
+      }
+    }
+    cerr<<"Total haploids in the analysis: "<<haploids<<endl;
+    ifs_person.close();
+  }
 }
 
 void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps, float * snp_penetrance, int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, float * frequency, float * weight, int * haplotype,int * flanking_snps){
+ cerr<<"Buffers initializing...\n";
  g_flanking_snps = *flanking_snps;
  g_active_haplotype = active_haplotype;
  g_prev_left_marker = prev_left_marker;
@@ -556,6 +590,8 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
     clSafe(err,"creating buffer subject_posterior_prob");
     buffer_subject_posterior_prob_block = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(float)*g_people*g_flanking_snps*4, NULL, &err);
     clSafe(err,"creating buffer subject_posterior_prob block");
+    buffer_haploid_arr = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int)*g_people, NULL, &err);
+    clSafe(err,"creating buffer haploid_arr");
     if (geno_dim==4){
       buffer_logpenetrance_cache = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(float)*g_people*2*g_max_haplotypes, NULL, &err);
       clSafe(err,"creating buffer logpenetrance_cache");
@@ -664,6 +700,8 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
     clSafe(err,"set kernel arg for kernel_compute_weights");
     err = kernel_compute_weights->setArg(arg++, *buffer_left_marker);
     clSafe(err,"set kernel arg for kernel_compute_weights");
+    err = kernel_compute_weights->setArg(arg++, *buffer_haploid_arr);
+    clSafe(err,"set kernel arg for kernel_compute_weights");
     err = kernel_compute_weights->setArg(arg++, *buffer_haplotype);
     clSafe(err,"set kernel arg for kernel_compute_weights");
     err = kernel_compute_weights->setArg(arg++, *buffer_region_snp_penetrance);
@@ -690,6 +728,7 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
     clSafe(err,"set kernel arg for kernel_compute_weights");
     err = kernel_compute_weights->setArg(arg++, cl::__local(sizeof(float)*1));
     clSafe(err,"set kernel arg for kernel_compute_weights");
+    cerr<<"Total args for kernel_compute_weights: "<<arg<<endl;
     kernelWorkGroupSize = kernel_compute_weights->getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>(devices[0], &err);
     clSafe(err,"get workgroup size kernel compute_weights");
     cerr<<"compute_weights kernel work group size is "<<kernelWorkGroupSize<<endl;
@@ -782,6 +821,8 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
       err = kernel_precompute_penetrance_fast->setArg(arg++, *buffer_prev_left_marker);
       clSafe(err,"set kernel arg for kernel_precompute_penetrance_fast");
       err = kernel_precompute_penetrance_fast->setArg(arg++, *buffer_left_marker);
+      clSafe(err,"set kernel arg for kernel_precompute_penetrance_fast");
+      err = kernel_precompute_penetrance_fast->setArg(arg++, *buffer_haploid_arr);
       clSafe(err,"set kernel arg for kernel_precompute_penetrance_fast");
       err = kernel_precompute_penetrance_fast->setArg(arg++, *buffer_beyond_left_edge_dosage);
       clSafe(err,"set kernel arg for kernel_precompute_penetrance_fast");
@@ -878,6 +919,8 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
       err = kernel_impute_genotype_denovo->setArg(arg++, *buffer_haplotypes);
       clSafe(err,"set kernel arg for kernel_impute_genotype_denovo");
       err = kernel_impute_genotype_denovo->setArg(arg++, *buffer_left_marker);
+      clSafe(err,"set kernel arg for kernel_impute_genotype_denovo");
+      err = kernel_impute_genotype_denovo->setArg(arg++, *buffer_haploid_arr);
       clSafe(err,"set kernel arg for kernel_impute_genotype_denovo");
       err = kernel_impute_genotype_denovo->setArg(arg++, *buffer_frequency);
       clSafe(err,"set kernel arg for kernel_impute_genotype_denovo");
@@ -1001,6 +1044,8 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
       clSafe(err,"set kernel arg for kernel_precompute_penetrance");
       err = kernel_precompute_penetrance->setArg(arg++, *buffer_left_marker);
       clSafe(err,"set kernel arg for kernel_precompute_penetrance");
+      err = kernel_precompute_penetrance->setArg(arg++, *buffer_haploid_arr);
+      clSafe(err,"set kernel arg for kernel_precompute_penetrance");
       err = kernel_precompute_penetrance->setArg(arg++, *buffer_packedhap);
       clSafe(err,"set kernel arg for kernel_precompute_penetrance");
       err = kernel_precompute_penetrance->setArg(arg++, *buffer_haplotype);
@@ -1096,6 +1141,8 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
       err = kernel_impute_genotype_guide->setArg(arg++, *buffer_extended_haplotypes);
       clSafe(err,"set kernel arg for kernel_impute_genotype_guide");
       err = kernel_impute_genotype_guide->setArg(arg++, *buffer_center_snp_end);
+      clSafe(err,"set kernel arg for kernel_impute_genotype_guide");
+      err = kernel_impute_genotype_guide->setArg(arg++, *buffer_haploid_arr);
       clSafe(err,"set kernel arg for kernel_impute_genotype_guide");
       err = kernel_impute_genotype_guide->setArg(arg++, *buffer_extended_root_mapping);
       clSafe(err,"set kernel arg for kernel_impute_genotype_guide");
@@ -1262,8 +1309,11 @@ void MendelGPU::init_buffers_(int * active_haplotype,int * max_window,int * max_
     // TRANSFER ANY DATA HERE
     err = commandQueue->enqueueWriteBuffer(*buffer_genotype_imputation, CL_TRUE, 0,sizeof(int), &g_genotype_imputation, NULL, NULL );
     clSafe(err, "write imputation mode");
+    err = commandQueue->enqueueWriteBuffer(*buffer_haploid_arr, CL_TRUE, 0,sizeof(int)*g_people, haploid_arr, NULL, NULL );
+    clSafe(err, "write haploid arr");
 #endif
   }
+  cerr<<"Buffers initialized\n";
 }
 
 void MendelGPU::init_region_buffers_(int * regionstart,int * regionend){
@@ -1352,46 +1402,28 @@ void MendelGPU::init_iteration_buffers_(){
 
 void MendelGPU::compute_haplotype_weights_(int * iteration){
   bool b_impute = g_genotype_imputation;
-  //b_impute = true;
   cerr<<"begin compute_weights at iteration: "<<iteration[0]<<"\n";
   bool debug_personhap = false;
-  //bool debug_personhap = iteration[0]==-2;
-  //bool debug_personhap = g_haplotypes[0]>4;
+  //bool debug_personhap = iteration[0]==2;
+  //bool debug_personhap = g_haplotypes[0]<-4;
   int debug_person = 10;
-  bool debug_weights = false;
+  bool debug_weights = g_haplotypes[0]<-4;
   bool debug_freq = g_haplotypes[0]<-4;
   if (run_gpu){
     double start = clock();
     #ifdef USE_GPU
-    //err = commandQueue->enqueueNDRangeKernel(*kernel_precompute_frequency,cl::NullRange,cl::NDRange(g_max_haplotypes*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-    //clSafe(err,"launch precompute_freq");
-    if (debug_freq){
-      float * tempfreq = new float[penetrance_matrix_size];
-      err = commandQueue->enqueueReadBuffer(*buffer_frequency_cache, CL_TRUE, 0, sizeof(float)*penetrance_matrix_size,tempfreq);
-      clSafe(err, "read freq");
-      cout<<"GPU freq:\n";
-      for(int j=0;j<g_max_haplotypes;++j){
-        int start = b_impute?j:0;
-        if (g_active_haplotype[j]){
-          for(int k=start;k<g_max_haplotypes;++k){
-            if (g_active_haplotype[k]){
-              cout<<" "<<tempfreq[j*g_max_haplotypes+k];
-            }
-          }
-          cout<<endl;
-        }
-      }
-    }
     err = commandQueue->enqueueWriteBuffer(*buffer_iteration, CL_TRUE, 0,sizeof(int), iteration, NULL, NULL );
     clSafe(err, "write iteration");
     if (geno_dim==4){
+      // for phased input
       err = commandQueue->enqueueNDRangeKernel(*kernel_compute_weights_haploid,cl::NullRange,cl::NDRange(g_people*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
       clSafe(err,"launch compute_weights");
     }else if (geno_dim==3){
+      // for unphased input
       err = commandQueue->enqueueNDRangeKernel(*kernel_compute_weights,cl::NullRange,cl::NDRange(g_people*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
       clSafe(err,"launch compute_weights");
     }
-    cerr<<"Launched compute_weights\n";
+    cerr<<"Launched compute_haplotype_weights\n";
     if (debug_personhap){
       float subject_haplotype_weight[g_people*g_max_haplotypes];
       err = commandQueue->enqueueReadBuffer(*buffer_subject_haplotype_weight, CL_TRUE, 0, sizeof(float)*g_people*g_max_haplotypes,subject_haplotype_weight);
@@ -1406,14 +1438,8 @@ void MendelGPU::compute_haplotype_weights_(int * iteration){
           }
         }
       }
-      //for(int j=0;j<g_max_haplotypes;++j){
-      //  if (g_active_haplotype[j]){
-      //    cerr<<"gpu hap "<<j<<" trueweight "<<haplotype_weight[j]<<endl;
-      //  }
-      //}
     }
     err = commandQueue->enqueueNDRangeKernel(*kernel_reduce_weights2,cl::NullRange,cl::NDRange(BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-    //err = commandQueue->enqueueNDRangeKernel(*kernel_reduce_weights,cl::NullRange,cl::NDRange(*haplotypes*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
     clSafe(err,"launch reduce_weights");
     cerr<<"Launched reduce_weights\n";
     err = commandQueue->enqueueReadBuffer(*buffer_haplotype_weight, CL_TRUE, 0, sizeof(float)*g_max_haplotypes,g_weight);
@@ -1436,10 +1462,10 @@ void MendelGPU::compute_haplotype_weights_(int * iteration){
     //for(int i=0;i<0;++i){
     double start = clock();
     if (debug_freq) cout<<"CPU freq: "<<endl;
-    for(int j=0;j<g_max_haplotypes;++j){
-      int start = b_impute?j:0;
-      if (g_active_haplotype[j]){
-        if (geno_dim==3){
+    if (geno_dim==3){
+      for(int j=0;j<g_max_haplotypes;++j){
+        int start = b_impute?j:0;
+        if (g_active_haplotype[j]){
           for(int k=start;k<g_max_haplotypes;++k){
             if (g_active_haplotype[k]){
               frequency_cache[j*g_max_haplotypes+k] = g_frequency[j]*g_frequency[k];
@@ -1452,34 +1478,32 @@ void MendelGPU::compute_haplotype_weights_(int * iteration){
       }
     }
     for(int i=0;i<g_people;++i){
+      int haploid = haploid_arr[i];
       float likelihood = 0;
       memset(g_current_weight,0,sizeof(float)*g_max_haplotypes);
       for(int j=0;j<g_max_haplotypes;++j){
-        if (g_active_haplotype[j]){
+        if (g_active_haplotype[j] && (iteration[0]==1 || subject_haplotype_weight[i*g_max_haplotypes+j]>0)){
           if(geno_dim==4){
-            if (iteration[0]==1 || subject_haplotype_weight[i*
-            g_max_haplotypes+j]>0 ){
-              for(int parent=0;parent<2;++parent){
-                float penetrance = penetrance_cache[i*2*g_max_haplotypes+
-                2*j+parent];
-                if (penetrance>0){
-                  float freq = g_frequency[j];
-                  float p = freq * penetrance;
-                  likelihood+=p;
-                  g_current_weight[j]+=p;
-                }
+            for(int parent=0;parent<2;++parent){
+              float penetrance = penetrance_cache[i*2*g_max_haplotypes+
+              2*j+parent];
+              if (penetrance>0){
+                float freq = g_frequency[j];
+                float p = freq * penetrance;
+                likelihood+=p;
+                g_current_weight[j]+=p;
               }
             }
           }else if (geno_dim==3){
             for(int k=j;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k] && 
-              (iteration[0]==1 || (subject_haplotype_weight[i*
-              g_max_haplotypes+j]>0 && subject_haplotype_weight[i*
-              g_max_haplotypes+k]>0))){
-                float penetrance = penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
+              if (g_active_haplotype[k] &&
+              (iteration[0]==1 || 
+              subject_haplotype_weight[i*g_max_haplotypes+k]>0)){
+                float penetrance = (haploid_arr[i] || j==k) ?
+                penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k]
+                : 0 ;
                 if (penetrance>0){
                   float freq = frequency_cache[j*g_max_haplotypes+k];
-                  //if (b_impute && j!=k) freq*=2;
                   float p = freq*penetrance;
                   likelihood+=p;
                   g_current_weight[j]+=p;

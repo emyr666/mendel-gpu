@@ -124,6 +124,7 @@ __constant int * region_snp_offset,
 __constant int * markers,
 __constant int * prev_left_marker,
 __constant int * left_marker,
+__global int * haploid_arr,
 __global int * beyond_left_edge_dosage,
 __global int * right_edge_dosage,
 __global float * region_snp_penetrance,
@@ -138,6 +139,8 @@ __local float * local_snp_penetrance_right,
 __local float * local_max_penetrance
 ) {
   int subject = get_group_id(0);
+  int haploid = haploid_arr[subject];
+  //int haploid = 0;
   int threadindex = get_local_id(0);
   for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
     int hapindex = chunk*BLOCK_WIDTH+threadindex;
@@ -166,7 +169,8 @@ __local float * local_max_penetrance
     if (local_active_haplotype[righthapindex]){
       for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
         int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
-        if (lefthapindex<=righthapindex&&local_active_haplotype[lefthapindex]){
+        if (lefthapindex<=righthapindex&&local_active_haplotype[lefthapindex]
+        &&(!haploid || lefthapindex==righthapindex)){
           float logpenetrance_old = prev_left_marker[0]!=left_marker[0] ?
           local_snp_penetrance_beyond_left[local_beyond_left_edge_dosage[
           righthapindex]+ local_beyond_left_edge_dosage[lefthapindex]] : 0;
@@ -198,7 +202,8 @@ __local float * local_max_penetrance
     if(local_active_haplotype[righthapindex]){
       for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
         int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
-        if (lefthapindex<max_haplotypes&&local_active_haplotype[lefthapindex]){
+        if (lefthapindex<max_haplotypes&&local_active_haplotype[lefthapindex]&&
+        (!haploid || lefthapindex==righthapindex)){
 
           float logpenetrance_old = prev_left_marker[0]!=left_marker[0] ?
           local_snp_penetrance_beyond_left[local_beyond_left_edge_dosage[
@@ -367,6 +372,7 @@ __constant int * genotype_imputation,
 __constant int * markers,
 __constant int * haplotypes,
 __constant int * left_marker,
+__global int * haploid_arr,
 __global float * frequency,
 __global float * penetrance_cache,
 __global int * subject_genotype,
@@ -388,6 +394,7 @@ __local float * local_cached_marginals,
 __local float * local_denom
 ) {
   int subject = get_group_id(0);
+  int haploid = haploid_arr[subject];
   int threadindex = get_local_id(0);
   for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
     int hapindex = chunk*BLOCK_WIDTH+threadindex;
@@ -418,7 +425,7 @@ __local float * local_denom
       for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
         int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
         if (lefthapindex<=righthapindex&&local_active_haplotype[lefthapindex]
-        && local_cached_marginals[lefthapindex]>0){
+        && local_cached_marginals[lefthapindex]>0 && (!haploid||lefthapindex==righthapindex)){
           float penetrance = penetrance_cache[subject*penetrance_matrix_size+
           righthapindex*max_haplotypes+lefthapindex];
           if (penetrance>0){
@@ -494,6 +501,7 @@ __local float * local_denom
   if(threadindex<4){
     subject_posterior_prob[subject*4+threadindex] = 
     local_posterior_prob[threadindex]/local_denom[0];
+    //local_posterior_prob[threadindex];
   }
   return;
 }

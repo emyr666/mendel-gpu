@@ -1,6 +1,7 @@
 #include <iostream>
 #include<sstream>
 #include<math.h>
+#include<cstdlib>
 
 using namespace std;
 const float epsilon = .001;

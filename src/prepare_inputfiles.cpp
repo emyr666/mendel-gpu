@@ -220,9 +220,13 @@ void load_haplo_data(){
     int pos;
     iss>>id>>pos>>a1>>a2;
     hap_record_t hap_record(id,pos,a1,a2);
+    char char_allele;
     int allele;
-    while(iss2>>allele){
-      hap_record.haplotypes.push_back(allele);
+    while(iss2>>char_allele){
+      if (char_allele=='0' || char_allele=='1'){
+        allele = (int)char_allele - (int)'0';
+        hap_record.haplotypes.push_back(allele);
+      }
     }
     hap_records.push_back(hap_record);
     //haplo_positions[pos] = i;
