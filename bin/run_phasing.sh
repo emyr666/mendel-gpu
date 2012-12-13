@@ -10,17 +10,10 @@ chr=$2
 chunk_start=$3
 chunk_end=$4
 
-#infile_haploid=0
-#if [[ $chr == 'X' && $all_male == '1' ]] ; then
-#   echo Haploid inputfile
-#   infile_haploid=1
-#fi
 is_sex_chr=0
 if [[ $chr == 'X' ]] ; then
   is_sex_chr=1
 fi
-
-
 
 mkdir -p  $IMPUTATION_DATA'/'$dbname'_phased'
 
@@ -54,5 +47,4 @@ do
       cat POSTERIORS |gzip -c - > $IMPUTATION_DATA'/'$dbname'_phased/phasing.chr'$chr'.part'$part'.chunk'$chunk'.gz'
     fi
   done
-  #rm -f $basefile'.part'*
 done

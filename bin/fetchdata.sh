@@ -14,17 +14,10 @@ basepath=$IMPUTATION_DATA'/'$dbname
 chunks=10
 
 cd $IMPUTATION_DATA
-#if [[ $chr == 'X' && $maleonly == '1' ]] ; then
-#  echo Haploid X
-#  haploid=1
-#else
-#  haploid=0
-#fi
 echo Fetching data on $dbname for Chr $chr
 mysql -h $DBHOST -u $DBUSER --password=$DBPW $dbname << END |chunk $chr $basepath $chunksize 'permutation' $chr 'sex'
 select count(*) from person;
 select chrom,position,rs,vector from $MASTERDB.$MASTERTABLE as a,genotype as b where chrom='$chr' and position>0 and a.rsnumber=b.rs order by position;
-#select chrom,position,rs,vector from $MASTERDB.$MASTERTABLE as a,genotype as b where chrom='$chr' and position>0 and a.rsnumber=b.rs limit 100;
 END
 for((chunk=0;chunk<$chunks;++chunk))
 do

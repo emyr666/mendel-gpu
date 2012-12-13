@@ -10,7 +10,7 @@ regionsize=$3
 haploid=0
 
 cd $IMPUTATION_DATA
-echo Unzipping raw data
+echo Unzipping raw data for Chr $chr
 gunzip -c $KGP_DIR'/ALL_1000G_phase1integrated_v3_chr'$chr'_impute.hap.gz' > temp.hap
 gunzip -c $KGP_DIR'/ALL_1000G_phase1integrated_v3_chr'$chr'_impute.legend.gz' > temp.legend
 echo Pruning rare SNPs

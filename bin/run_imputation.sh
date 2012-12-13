@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -lt 5 ] ; then
-  echo "<study> <all_male=1|0> <chr> <startchunk> <endchunk>"
+  echo "<study> <haploid X? [1|0]> <chr> <startchunk> <endchunk>"
   exit 1
 fi
 
@@ -37,6 +37,7 @@ do
       merged_gz=$IMPUTATION_DATA'/'$study'_phased/phasing.merged.'$chr_code'.'$chunk'.gz'
       if [[ -f $merged_gz && ! -f $imputed_results'/quality.chr'$chr'.part'$part'.chunk'$chunk'.gz' ]] ; then
         echo Prepping inputfiles for Chr $chr_code Region $part Subjectchunk $chunk
+exit 0
         gunzip -c $merged_gz > study.phasing
         cp $IMPUTATION_DATA'/'$study'_phased/snplist.merged.'$chr_code study.snplist
         prep_swiftgpu_input.sh $chr_code kgp.legend kgp.hap phasing study
@@ -52,7 +53,7 @@ do
         echo Running haploid imputation on $people persons $snps SNPs $total_regions regions with remainder $remainder
         cat settings.imputation | sed "s/people/$people/" | sed "s/snps/$snps/" | sed "s/total_regions/$total_regions/" |sed "s/infile_haploid/$infile_haploid/" > settings.txt
         impute 1>impute.out 2>impute.debug
-        # post process files
+       # post process files
         cat QUALITY |gzip -c - > $imputed_results'/quality.chr'$chr'.part'$part'.chunk'$chunk'.gz'
         cat DOSAGES |gzip -c - > $imputed_results'/dosages.chr'$chr'.part'$part'.chunk'$chunk'.gz'
         cat GENOTYPES |gzip -c - > $imputed_results'/genotypes.chr'$chr'.part'$part'.chunk'$chunk'.gz'
