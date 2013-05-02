@@ -1,7 +1,7 @@
 # BELOW ARE EXAMPLES OF POTENTIAL HARDWARE PROFILES IF YOU PLAN TO DEPLOY
 # THE PROGRAM ON MULTIPLE MACHINES
-include locations.baseline
-#include locations.gpu
+#include locations.baseline
+include locations.gpu
 
 FORTRAN_OBJS=fortran_wrapper.o
 CL_OBJS=cl_interface.o clsafe.o mendel_gpu_common.o mendel_gpu_denovo.o mendel_gpu_guide.o

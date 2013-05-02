@@ -24,5 +24,5 @@ fi
 
 for chr in $chrs
 do
-  run_imputation.sh $study $haploidX $chr $startchunk $endchunk
+  run_haploid_imputation.sh $study $haploidX $chr $startchunk $endchunk
 done

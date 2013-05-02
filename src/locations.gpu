@@ -3,7 +3,8 @@ PREPROC=-DUSE_GPU
 CL_ROOT=/home/garykche/ati-stream-sdk-v2.2-lnx64
 # 1st arg make sure you see directory CL under include
 # 2nd arg make sure you see directory GL under include 
-INC_FLAGS=-I$(CL_ROOT)/include -I/usr/local/cuda_sdk/shared/inc
+INC_FLAGS=-I$(CL_ROOT)/include 
+#INC_FLAGS=-I$(CL_ROOT)/include -I/usr/local/cuda_sdk/shared/inc
 # 1st arg make sure libOpenCL.so is under lib
 LINK_FLAGS=-L$(CL_ROOT)/lib/x86_64 -lgfortran -lOpenCL
 LINKER=gfortran
