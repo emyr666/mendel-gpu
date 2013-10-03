@@ -1,3 +1,7 @@
-LINK_FLAGS=-lgfortran -lstdc++
+CINC_FLAGS=-I.  -Wall -g
+FINC_FLAGS=-I./finclude/
 LINKER=gfortran
+LINK_FLAGS=-lgfortran -lstdc++
+C_COMPILER=g++
+
 

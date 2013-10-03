@@ -18,6 +18,7 @@ IS_SEX_CHR is_sex_chr
 INFILE_REFHAP out.haplotype.data
 INFILE_GENO_DIM 3 # set this to 4 for phased input, 3 for unphased
 INFILE_SEX sex
+INFILE_POLYMORPHISMS polymorphisms
 INFILE_GENO_FILEFORMAT bam # set this to bam or glf
 INFILE_GENO genotype.stream
 OUTFILE_FORMAT mec

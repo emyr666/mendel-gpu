@@ -3,344 +3,37 @@ using namespace std;
 #include<fstream>
 #include<sstream>
 #include<vector>
+#include<queue>
 #include<tr1/unordered_set>
 #include<tr1/unordered_map>
 #include<set>
 #include<map>
 #include<list>
 #include<math.h>
-#include"cl_constants.h"
+#include"../cl_constants.h"
 #include<cstdlib>
 #include<string.h>
 #ifdef USE_GPU
 #include<CL/cl.hpp>
-#include"clsafe.h"
+#include"../clsafe.h"
 #endif
-#include"mendel_gpu.hpp"
+#include"../io_manager.hpp"
+#include"../mendel_gpu.hpp"
 
 
-void MendelGPU::parse_ref_haplotype(){
-  string line;
-  ifstream ifs(infile_refhap.data());
-  if(!ifs.is_open()){
-    cerr <<"Cannot open ref haplotypes file "<<infile_refhap<<endl;
-    exit(1);
-  }
-  getline(ifs,line);
-  ref_haplotypes = line.length();
-  ifs.close();
-  cerr<<"Parsing "<<ref_haplotypes<<" ref haplotypes across "<<g_snps<<" SNPs.\n";
-  ref_haplotype = new char[ref_haplotypes * g_snps];
-  ifs.open(infile_refhap.data());
-  for(int i=0;i<g_snps;++i){
-    getline(ifs,line);
-    for(int j=0;j<ref_haplotypes;++j){
-      ref_haplotype[j*g_snps+i] = line[j];
-    }
-  }
-  ifs.close();
+void GuidedMendelGPU::impute_genotypes(){
+  prep_impute_genotypes_guide();
+  impute_diploid_genotypes_guide(1,1,1);
 }
 
-void MendelGPU::copy_ref_haplotypes_(){
-  bool debug_haplotype = false;
-  int left_marker = g_left_marker[0]-1;
-  int marker_len = g_markers[0];
-  // save the original # of markers from MENDEL
-  extended_markers = marker_len;
-  cerr<<"Including guide haplotypes of length: "<<marker_len<<" at left marker: "<<left_marker<<endl;
-  // generate a hash table of unique template haplotypes
-  std::tr1::unordered_map<string,set<string> > temp_hap_window;
-  //map<string,set<string> > temp_hap_window;
-  for(int i=0;i<g_max_haplotypes;++i) g_active_haplotype[i] = 0;
-  g_informative_markers = 0;
-  for(int j=0;j<marker_len;++j){
-    if (informative_snp[left_marker+j]){
-      extended_snp_mapping[g_informative_markers] = j;
-      ++g_informative_markers;
-    }
-  }
-  // notify MENDEL that the # of markers is temporarily reduced
-  g_markers[0] = g_informative_markers;
-  // tally up the counts of each reference haplotype
-  ref_hap_counts.clear();
-  for(int i=0;i<ref_haplotypes;++i){
-    string curhap_long(ref_haplotype+i*g_snps+left_marker,marker_len);
-    if (ref_hap_counts.find(curhap_long)==ref_hap_counts.end()){
-      ref_hap_counts[curhap_long] = 0;
-    }
-    ++ref_hap_counts[curhap_long];
-  }
-  // rank the template haplotypes by their frequencies
-  multiset<hapobj_t,byHapCountDesc> sorted_guides_extended;
-  for(std::tr1::unordered_map<string,int >::iterator it =
-  ref_hap_counts.begin();it!=ref_hap_counts.end();it++){
-    hapobj_t hapobj;
-    hapobj.hapstr = it->first; 
-    hapobj.hapcount = it->second;
-    sorted_guides_extended.insert(hapobj);
-  }
-  int extended_count = 0;
-  for(multiset<hapobj_t,byHapCountDesc>::iterator it = 
-  sorted_guides_extended.begin();it!=sorted_guides_extended.end();it++){
-    if (extended_count<g_max_extended_haplotypes){
-      hapobj_t hapobj = *it;
-      string curhap_long = it->hapstr;
-      char shorthap[g_informative_markers];
-      for(int j=0;j<g_informative_markers;++j){
-        shorthap[j] = curhap_long[extended_snp_mapping[j]];
-      }
-      string curhap_short(shorthap,g_informative_markers);
-      if (temp_hap_window.find(curhap_short)==temp_hap_window.end()){
-        set<string> temp;
-        temp_hap_window[curhap_short] = temp;
-      }
-      temp_hap_window[curhap_short].insert(curhap_long);
-      ++extended_count;
-    }
-  }
-  // rank the template haplotypes by their frequencies
-  multiset<hapobj_t,byHapCountDesc> sorted_guides;
-  for(std::tr1::unordered_map<string,set<string> >::iterator it = temp_hap_window.begin();it!=temp_hap_window.end();it++){
-    hapobj_t hapobj;
-    hapobj.hapstr = it->first; 
-    hapobj.hapcount = it->second.size();
-    hapobj.extended_set = it->second;
-    sorted_guides.insert(hapobj);
-  }
-  // ADD TO HAP WINDOW THE DENOVO HAPLOTYPES
-  int totalcounts = 0;
-  string hapstrarr[g_max_haplotypes];
-  int countarr[g_max_haplotypes];
-  full_hap_window.clear();
-  // we need to know how many full haplotypes there are
-  int compact_haplotypes = 0;
-  extended_haplotypes = 0;
-  int max_extended_haplotypes = g_max_haplotypes;
-  for(multiset<hapobj_t,byHapCountDesc>::iterator it = sorted_guides.begin();it!=sorted_guides.end();it++){
-    if (compact_haplotypes<g_max_haplotypes){
-      hapobj_t hapobj = *it;
-      for(int j=0;j<g_informative_markers;++j){
-        g_haplotype[compact_haplotypes *g_max_window+j] = hapchar2int(hapobj.hapstr[j]);
-      }
-      g_active_haplotype[compact_haplotypes] = 1;
-      hapstrarr[compact_haplotypes] = hapobj.hapstr;
-      countarr[compact_haplotypes] = hapobj.hapcount;
-      totalcounts+= hapobj.hapcount;
-      if (debug_haplotype) cerr<<"Considering "<<hapobj.hapstr<<" count: "<<hapobj.hapcount<<endl;
-      for(set<string>::iterator it=hapobj.extended_set.begin();
-      it!=hapobj.extended_set.end();it++){
-        if(debug_haplotype) cerr<<" extended: "<<*it<<endl;
-        ++extended_haplotypes;
-      }
-      full_hap_window[hapobj.hapstr] = hapobj.extended_set;
-      ++compact_haplotypes;
-    }
-  }
-  // UPDATE TOTAL HAPLOTYPE SIZE
-  g_haplotypes[0] = compact_haplotypes;
-  cerr<<"Working haplotypes after adding templates: "<<compact_haplotypes<<endl;
-  cerr<<"Extended haplotypes: "<<extended_haplotypes<<endl;
-  if (debug_haplotype) cerr<<"STORING "<<g_haplotypes[0]<<
-  " TRUE HAPLOTYPES AND FREQS:\n";
-  for(int i=0;i<g_max_haplotypes;++i){
-    if(g_active_haplotype[i]){
-       g_frequency[i] = 1.*countarr[i]/totalcounts;
-       if (debug_haplotype){
-         cerr<<i<<":"<<hapstrarr[i]<<","<<g_frequency[i]<<endl;
-       }
-    }
-  }
-  if (debug_haplotype) exit(0);
-}
-
-void MendelGPU::precompute_penetrance_(){
-  int left_marker = g_left_marker[0]-1;
-  bool debug_penmat = left_marker<-1;
-  cerr<<"Entering precompute_penetrance at left marker "<<left_marker<<"\n";
-  int debug_subject = 200;
-  for(int hapindex=0;hapindex<g_haplotypes[0];++hapindex){
-    compress(hapindex,g_markers[0],g_haplotype);
-  }
-  if (run_gpu){
-#ifdef USE_GPU
-    err = commandQueue->enqueueWriteBuffer(*buffer_haplotypes, CL_TRUE, 0, sizeof(int),g_haplotypes,NULL,NULL);
-    clSafe(err, "write total haplotypes");
-    err = commandQueue->enqueueWriteBuffer(*buffer_packedhap, CL_TRUE, 0,sizeof(packedhap_t)*g_max_haplotypes*packedhap_len, packedhap, NULL, NULL );
-    clSafe(err, "write packedhaplotypes");
-    err = commandQueue->enqueueWriteBuffer(*buffer_extended_snp_mapping, CL_TRUE, 0, sizeof(int)*g_max_window,extended_snp_mapping,NULL,NULL);
-    clSafe(err, "write extended_snp_mapping");
-    if (geno_dim==4){
-      err = commandQueue->enqueueNDRangeKernel(*kernel_precompute_penetrance_haploid,cl::NullRange,cl::NDRange(g_people*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-      clSafe(err,"launch precompute penetrance haploid");
-    }else{
-      err = commandQueue->enqueueNDRangeKernel(*kernel_precompute_penetrance,cl::NullRange,cl::NDRange(g_people*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-      clSafe(err,"launch precompute penetrance");
-    }
-    if(debug_penmat){
-      if (geno_dim==4){
-        float * debug_cache = new float[g_people*g_max_haplotypes*2];
-        //err = commandQueue->enqueueReadBuffer(*buffer_logpenetrance_cache, CL_TRUE, 0, sizeof(float)*g_people*2*g_max_haplotypes,debug_cache);
-        //clSafe(err, "read logpenetrance cache");
-        err = commandQueue->enqueueReadBuffer(*buffer_penetrance_cache, CL_TRUE, 0, sizeof(float)*g_people*2*g_max_haplotypes,debug_cache);
-        clSafe(err, "read penetrance cache");
-        cout<<"GPU:\n";
-        for(int j=0;j<g_max_haplotypes;++j){
-          if (g_active_haplotype[j]){
-            cout<<j<<":";
-            for(int k=0;k<2;++k){
-              cout<<" "<<debug_cache[debug_subject*2*g_max_haplotypes+2*j+k];
-            }
-            cout<<endl;
-          }
-        }
-      }else{
-        float * debug_cache = new float[g_people*penetrance_matrix_size];
-        err = commandQueue->enqueueReadBuffer(*buffer_logpenetrance_cache, CL_TRUE, 0, sizeof(float)*g_people*penetrance_matrix_size,debug_cache);
-        clSafe(err, "read logpenetrance cache");
-        //err = commandQueue->enqueueReadBuffer(*buffer_penetrance_cache, CL_TRUE, 0, sizeof(float)*g_people*penetrance_matrix_size,debug_cache);
-        //clSafe(err, "read penetrance cache");
-        cout<<"GPU:\n";
-        for(int j=0;j<g_max_haplotypes;++j){
-          if (g_active_haplotype[j]){
-            cout<<j<<":";
-            for(int k=0;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k]){
-                cout<<" "<<debug_cache[debug_subject*penetrance_matrix_size+j*g_max_haplotypes+k];
-              }
-            }
-            cout<<endl;
-          }
-        }
-        delete[] debug_cache;
-      }
-    }
-#endif
-  }
-  if(run_cpu){
-    double start = clock();
-    for(int i=0;i<g_people;++i){
-      int haploid = haploid_arr[i];
-      float maxlog = -1000;
-      for(int j=0;j<g_max_haplotypes;++j){
-        if (g_active_haplotype[j]){
-          //decompress(j,g_markers[0],g_haplotype);
-          if (geno_dim==4){
-            float logpenetrance[2] = {0,0};
-            for(int l=0;l<g_markers[0];++l){
-              //int dose = g_haplotype[j*g_max_window+l];
-              bool dose = (((int)packedhap[j*packedhap_len+
-              (l/32)].octet[(l%32)/8]) >> 
-              ((l%32)%8) & 1) ;
-              //cerr<<"dose1,2: "<<dose<<","<<dose2<<endl;
-
-              for(int parent=0;parent<2;++parent){
-                logpenetrance[parent]+=g_region_snp_penetrance[i*
-                geno_dim*g_max_region_size+geno_dim*(left_marker+
-                extended_snp_mapping[l]-g_region_snp_offset)+2*parent+dose]; 
-                //cerr<<"Hap "<<j<<" Person "<<i<<" parent "<<parent<<" SNP "<<left_marker+extended_snp_mapping[l]<<" dose "<<dose<<" value "<<
-                //g_region_snp_penetrance[i*
-                //geno_dim*g_max_region_size+geno_dim*(left_marker+
-                //extended_snp_mapping[l]-g_region_snp_offset)+2*parent+dose]<<
-                //endl; 
-                
-              }
-            }
-            for(int parent=0;parent<2;++parent){
-              //cerr<<"Hap "<<j<<" person "<<i<<" log penetrance for parent "<<parent<<": "<<logpenetrance[parent]<<endl;
-            }
-            //exit(0);
-            for(int parent=0;parent<2;++parent){
-              logpenetrance_cache[i*2*g_max_haplotypes+2*j+parent] = 
-              logpenetrance[parent];
-              if (logpenetrance[parent]>maxlog) maxlog = logpenetrance[parent];
-            }
-          }else{
-            for(int k=0;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k] && (!haploid || j==k)){
-                decompress(k,g_markers[0],g_haplotype);
-                float logpenetrance = 0;
-                for(int l=0;l<g_markers[0];++l){
-                  int n=g_haplotype[j*g_max_window+l] + g_haplotype[k*g_max_window+l];
-                  logpenetrance+=g_region_snp_penetrance[i*(geno_dim*g_max_region_size)+geno_dim*(left_marker+extended_snp_mapping[l]-g_region_snp_offset) +  n]; 
-           
-                }
-                logpenetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k] = logpenetrance;
-                if (logpenetrance>maxlog) maxlog = logpenetrance;
-              }
-            }
-          } 
-        }
-      }
-//maxlog = 0;
-      for(int j=0;j<g_max_haplotypes;++j){
-        if (g_active_haplotype[j]){
-          if (geno_dim==4){
-            //cerr<<"maxlog: "<<maxlog<<endl;
-            float val[2];
-            for(int parent=0;parent<2;++parent){
-              val[parent] = logpenetrance_cache[i*2*g_max_haplotypes+
-              2*j+parent]-maxlog;
-              logpenetrance_cache[i*2*g_max_haplotypes+2*j+parent] = 
-              val[parent];
-              penetrance_cache[i*2*g_max_haplotypes+2*j+parent] = 
-              val[parent]>=logpenetrance_threshold?exp(val[parent]):0;
-              //cerr<<"hap:"<<j<<",person "<<i<<",parent:"<<parent<<",logval:"<<logpenetrance_cache[i*2*g_max_haplotypes+2*j+parent]<<",val:"<<penetrance_cache[i*2*g_max_haplotypes+2*j+parent]<<endl;
-            }
-          }else{
-            for(int k=0;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k] && (!haploid || j==k)){
-                float val = logpenetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k]-maxlog;
-                logpenetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k] = val;
-                penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k] = val>=logpenetrance_threshold?exp(val):0;
-              }
-            }
-          }
-        }
-      }
-    }
-    if(debug_penmat){
-      cout<<"CPU:\n";
-      if (geno_dim==4){
-        for(int j=0;j<g_max_haplotypes;++j){
-          if (g_active_haplotype[j]){
-            cout<<j<<":";
-            for(int k=0;k<2;++k){
-              cout<<" "<<penetrance_cache[debug_subject*2*g_max_haplotypes
-              +2*j+k];
-              //cout<<" "<<logpenetrance_cache[debug_subject*2*g_max_haplotypes
-              //+2*j+k];
-            }
-            cout<<endl;
-          }
-        }
-      }else{
-        for(int j=0;j<g_max_haplotypes;++j){
-          if (g_active_haplotype[j]){
-            cout<<j<<":";
-            for(int k=0;k<g_max_haplotypes;++k){
-              if (g_active_haplotype[k]){
-                cout<<" "<<logpenetrance_cache[debug_subject*penetrance_matrix_size+j*g_max_haplotypes+k];
-              }
-            }
-            cout<<endl;
-          }
-        }
-      }
-    }
-    cerr<<"Standard compute penetrance time: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
-  }
-  if (debug_penmat) exit(0);
-  cerr<<"Leaving precompute_penetrance\n";
-}
-
-void MendelGPU::prep_impute_genotypes_guide_(){
-  int left_marker = g_left_marker[0]-1;
+void GuidedMendelGPU::prep_impute_genotypes_guide(){
+  int left_marker = g_left_marker;
   cerr<<"begin prep impute_genotypes at left SNP "<<left_marker<<endl;
   int max_geno=g_genotype_imputation?3:4;
   int curhapindex = 0;
   if (debug_mode) ofs_debug_haplotype_file<<"Extended haplotypes for left marker "<<left_marker<<endl;
-  for(int i=0;i<g_haplotypes[0];++i){
-    string hapstring = hapstr(g_haplotype+i*g_max_window,g_markers[0]);
+  for(int i=0;i<g_haplotypes;++i){
+    string hapstring = hapstr(g_haplotype+i*g_max_window,g_markers);
     if (full_hap_window.find(hapstring)==full_hap_window.end()){
       cerr<<"Orphaned hapstr "<<hapstring<<endl;
       exit(1);
@@ -367,6 +60,7 @@ void MendelGPU::prep_impute_genotypes_guide_(){
     it!=extendedhaps.end();it++){
        string str = *it;
        for(int k=0;k<extended_markers;++k){
+         //cerr<<"Making extended hap for "<< curhapindex*g_max_window+k<<"\n";
          extended_haplotype[curhapindex*g_max_window+k] = hapchar2int(str[k]);
        }
        extended_frequency[curhapindex] = extendedfreq[j];
@@ -382,7 +76,7 @@ void MendelGPU::prep_impute_genotypes_guide_(){
   }
   if (run_gpu){
     #ifdef USE_GPU
-    err = commandQueue->enqueueWriteBuffer(*buffer_haplotypes, CL_TRUE, 0,sizeof(int), g_haplotypes, NULL, NULL );
+    err = commandQueue->enqueueWriteBuffer(*buffer_haplotypes, CL_TRUE, 0,sizeof(int), &g_haplotypes, NULL, NULL );
     clSafe(err, "write extended_haplotypes");
     err = commandQueue->enqueueWriteBuffer(*buffer_extended_haplotypes, CL_TRUE, 0,sizeof(int), &extended_haplotypes, NULL, NULL );
     clSafe(err, "write extended_haplotypes");
@@ -395,12 +89,12 @@ void MendelGPU::prep_impute_genotypes_guide_(){
   cerr<<"done prep impute_genotypes at left SNP "<<left_marker<<endl;
 }
 
-void MendelGPU::impute_diploid_genotypes_guide_(int * center_snp_start, 
-int * center_snp_end, int * center_snp_offset){
+void GuidedMendelGPU::impute_diploid_genotypes_guide(int  center_snp_start, 
+int  center_snp_end, int  center_snp_offset){
   int max_geno=g_genotype_imputation?3:4;
-  int c_snp_start = *center_snp_start-1;
-  int c_snp_end = *center_snp_end;
-  int c_snp_offset = *center_snp_offset-1;
+  int c_snp_offset = g_center_snp_start;
+  int c_snp_start = g_center_snp_start - g_left_marker;
+  int c_snp_end = c_snp_start+g_flanking_snps;
   bool debug_geno = false;
   bool debug_dosage = c_snp_start==-50;
   bool debug_posterior = c_snp_start==-50;
@@ -534,6 +228,7 @@ int * center_snp_end, int * center_snp_offset){
     for(int i=0;i<g_people;++i){
       int haploid = haploid_arr[i];
       for(int j=0;j<extended_haplotypes;++j){
+        //cerr<<"subject hap weight for hap "<<extended_root_mapping[j]<<" is "<<subject_haplotype_weight[i*g_max_haplotypes+extended_root_mapping[j]] <<" for subject "<<i<<endl;
         if(subject_haplotype_weight[i*g_max_haplotypes+
           extended_root_mapping[j]]>0){ 
           //decompress(j,extended_markers,extended_haplotype);
@@ -541,6 +236,7 @@ int * center_snp_end, int * center_snp_offset){
             if((!haploid ||  extended_root_mapping[j] == 
             extended_root_mapping[k]) && subject_haplotype_weight[i*
             g_max_haplotypes+extended_root_mapping[k]]>0){ 
+              //cerr<<"subject hap weight for hap "<<k<<" is pos for subject "<<i<<endl;
               //decompress(k,extended_markers,extended_haplotype);
               float penetrance =
               penetrance_cache[i*penetrance_matrix_size+extended_root_mapping[j]*
@@ -549,6 +245,7 @@ int * center_snp_end, int * center_snp_offset){
                 for(int c_snp = c_snp_start;c_snp<c_snp_end; ++c_snp){
                   int packedsite = c_snp - c_snp_start;
                   int current_snp = c_snp_offset + c_snp;
+//cerr<<"packed site and current snp: "<<packedsite<<","<<current_snp<<endl;
                   int m;
                   if(g_genotype_imputation){
                     m = (((int)packedextendedhap[j*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)packedextendedhap[k*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) ;
@@ -561,6 +258,7 @@ int * center_snp_end, int * center_snp_offset){
                   //p = 1;
                   subject_posterior_prob[i*g_flanking_snps*4+(packedsite)*4+m]+=p;
                   if (debug_pen) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
+                  //if (debug_pen) cerr<<"packedsite: "<<packedsite<<endl;
                 }
               }
             }
@@ -590,14 +288,17 @@ int * center_snp_end, int * center_snp_offset){
     }
     for(int c_snp = c_snp_start;c_snp<c_snp_end; ++c_snp){
       int current_snp = c_snp_offset + c_snp;
-      if (outfile_format.compare(FORMAT_MEC)==0){
-        ofs_genotype_file<<current_snp<<"\t";
-        ofs_dosage_file<<current_snp<<"\t";
-        ofs_posterior_file<<current_snp;
-      }
+//      if (outfile_format.compare(FORMAT_MEC)==0){
+//        ofs_genotype_file<<current_snp<<"\t";
+//        ofs_dosage_file<<current_snp<<"\t";
+//        ofs_posterior_file<<current_snp;
+//      }
+      float dosages[g_people];
+      float posteriors[g_people*max_geno];
+      int genotypes[g_people];
       for(int i=0;i<g_people;++i){
         // compute normalizing constant
-        float denom = 0;
+        float denom = epsilon;
         float maxval = 0;
         int genotype = 0;
         for(int m=0;m<max_geno;++m){
@@ -609,42 +310,60 @@ int * center_snp_end, int * center_snp_offset){
             genotype = m;
           }
         }
+        //cerr<<"Person "<<i<<" denom is "<<denom<<endl;
         if (debug_geno) cout<<"CPUGENO:\t"<<i<<"\t"<<current_snp<<"\t"<<genotype<<endl;
-        if (outfile_format.compare(FORMAT_MEC)==0){
-          ofs_genotype_file<<genotype;
-        }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-          ofs_genotype_file<<"CPU_GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<genotype<<endl;
+        genotypes[i] = genotype;
+//        if (outfile_format.compare(FORMAT_MEC)==0){
+//          ofs_genotype_file<<genotype;
+//        }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
+//          ofs_genotype_file<<"CPU_GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<genotype<<endl;
+//        }
+        dosages[i] = 0;
+        for(int j=0;j<max_geno;++j){
+          int snpindex = c_snp-c_snp_start;
+          float p = subject_posterior_prob[i*g_flanking_snps*4+
+          (c_snp-c_snp_start)*4+j]/denom;
+          posteriors[i*max_geno+j] = p;
+          dosages[i]+=j*p;
         }
-        float dose = 0;
-        if (outfile_format.compare(FORMAT_MEC)==0){
-          for(int j=0;j<max_geno;++j){
-            float p = subject_posterior_prob[i*g_flanking_snps*4+
-            (c_snp-c_snp_start)*4+j]/denom;
-            ofs_posterior_file<<"\t"<<p;
-            dose+=j*p;
-          }
-          char chardose =  (int)(dose*10)+'A';
-          ofs_dosage_file<<chardose;
-        }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-          ofs_posterior_file<<"CPU_POSTERIOR\t"<<i<<"\t"<<current_snp;
-          for(int j=0;j<max_geno;++j){
-            float p = subject_posterior_prob[i*g_flanking_snps*4+
-            (c_snp-c_snp_start)*4+j]/denom;
-            if(debug_mode)ofs_posterior_file<<"\t"<< p;
-            dose+=j*p;
-          }
-          ofs_dosage_file<<"CPU_DOSE:\t"<<i<<"\t"<<current_snp<<"\t"<<dose<<endl;
-          ofs_posterior_file<<endl;
-        }
-        subject_dosages[i*g_flanking_snps+(c_snp-c_snp_start)] = dose;
+        subject_dosages[i*g_flanking_snps+(c_snp-c_snp_start)] = dosages[i];
+ 
+
+//        float dose=0;
+//        if (outfile_format.compare(FORMAT_MEC)==0){
+//          for(int j=0;j<max_geno;++j){
+//            float p = subject_posterior_prob[i*g_flanking_snps*4+
+//            (c_snp-c_snp_start)*4+j]/denom;
+//            //ofs_posterior_file<<"\t"<<p;
+//            dose+=j*p;
+//          }
+//          char chardose =  (int)(dose*10)+'A';
+//          //ofs_dosage_file<<chardose;
+//        }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
+//          //ofs_posterior_file<<"CPU_POSTERIOR\t"<<i<<"\t"<<current_snp;
+//          for(int j=0;j<max_geno;++j){
+//            float p = subject_posterior_prob[i*g_flanking_snps*4+
+//            (c_snp-c_snp_start)*4+j]/denom;
+//            if(debug_mode)ofs_posterior_file<<"\t"<< p;
+//            dose+=j*p;
+//          }
+//          //ofs_dosage_file<<"CPU_DOSE:\t"<<i<<"\t"<<current_snp<<"\t"<<dose<<endl;
+//          //ofs_posterior_file<<endl;
+//        }
       }
-      if (outfile_format.compare(FORMAT_MEC)==0){
-        ofs_genotype_file<<endl;
-        ofs_dosage_file<<endl;
-      }
+      //if (outfile_format.compare(FORMAT_MEC)==0){
+        //ofs_genotype_file<<endl;
+        //ofs_dosage_file<<endl;
+      //}
       float rsq = compute_rsq(subject_dosages,
       g_flanking_snps,(c_snp-c_snp_start));
-      ofs_quality_file<<current_snp<<"\t"<<rsq<<endl;
+      if (max_geno==3){
+        io_manager->writeDosage(current_snp,dosages,g_people);
+        io_manager->writeGenotype(current_snp,genotypes,g_people);
+      }
+      io_manager->writePosterior(max_geno,current_snp,posteriors,g_people);
+
+      //ofs_quality_file<<current_snp<<"\t"<<rsq<<endl;
     }
   }//END CPU VERSION
   cerr<<"done impute_geno\n";
@@ -655,12 +374,12 @@ int * center_snp_end, int * center_snp_offset){
   }
 }
 
-void MendelGPU::impute_haploid_genotypes_guide_(int * center_snp_start, 
-int * center_snp_end, int * center_snp_offset){
+void GuidedMendelGPU::impute_haploid_genotypes_guide(int  center_snp_start, 
+int  center_snp_end, int  center_snp_offset){
   int max_geno=g_genotype_imputation?3:4;
-  int c_snp_start = *center_snp_start-1;
-  int c_snp_end = *center_snp_end;
-  int c_snp_offset = *center_snp_offset-1;
+  int c_snp_start = center_snp_start;
+  int c_snp_end = center_snp_end-1;
+  int c_snp_offset = center_snp_offset;
   bool debug_geno = false;
   bool debug_dosage = c_snp_start==-50;
   bool debug_posterior = false;

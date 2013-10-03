@@ -1,46 +1,53 @@
 # BELOW ARE EXAMPLES OF POTENTIAL HARDWARE PROFILES IF YOU PLAN TO DEPLOY
 # THE PROGRAM ON MULTIPLE MACHINES
-#include locations.baseline
-include locations.gpu
 
-FORTRAN_OBJS=fortran_wrapper.o
-CL_OBJS=cl_interface.o clsafe.o mendel_gpu_common.o mendel_gpu_denovo.o mendel_gpu_guide.o
+include include.mk
 
-OBJS=$(CL_OBJS) $(FORTRAN_OBJS)
+DIRS=algorithms
+DIRS+=penetrance
+DIRS+=imputation
+
+LIBDIR=../lib
+
+FORTRAN_OBJS=matrix_completion.o fortran_wrapper.o 
+COMMON_OBJS=main.o io_manager.o clsafe.o
+SUB_OBJS=algorithms/*.o penetrance/*.o imputation/*.o
+
+OBJS=$(C_OBJS)
+#OBJS=$(C_OBJS) $(FORTRAN_OBJS)
 
 C_COMPILER=g++
 F_COMPILER=gfortran
 
 PROGRAM=../bin/impute
 
-impute: $(OBJS)
-	$(LINKER) -o $(PROGRAM) $(LINK_FLAGS) $(OBJS)
+impute::
+	for dir in $(DIRS); do(cd $$dir; make $1 || exit 1) || exit 1; done
 
-utility: compress_float.cpp prepare_inputfiles.cpp chunk.cpp prepare_denovo.cpp make_haplo_posteriors.cpp split_file.cpp
-	g++ -o ../bin/compress_float compress_float.cpp
-	g++ -o ../bin/prepare_inputfiles prepare_inputfiles.cpp
-	g++ -o ../bin/chunk chunk.cpp
-	g++ -o ../bin/prepare_denovo prepare_denovo.cpp
-	g++ -o ../bin/make_haplo_posteriors make_haplo_posteriors.cpp
-	g++ -o ../bin/split_file split_file.cpp
+impute:: $(COMMON_OBJS)
+	$(LINKER) -o $(PROGRAM) $(LINK_FLAGS) $(SUB_OBJS) $(COMMON_OBJS)  -L. -ltools $(LIBDIR)/libbam.a
+
+matrix_completion.o: matrix_completion.f90
+	$(F_COMPILER) $(FINC_FLAGS) -c $<
 
 fortran_wrapper.o: fortran_wrapper.f90
-	$(F_COMPILER) -c $<
+	$(F_COMPILER) $(FINC_FLAGS) -c $<
 
-cl_interface.o: cl_interface.cpp mendel_gpu.hpp clsafe.h cl_constants.h
-	$(C_COMPILER) $(INC_FLAGS) $(PREPROC) -c $<
+main.o: main.cpp mendel_gpu.hpp
+	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
-mendel_gpu_common.o: mendel_gpu_common.cpp clsafe.h cl_constants.h
-	$(C_COMPILER) $(INC_FLAGS) $(PREPROC) -c $<
+io_manager.o: io_manager.cpp io_manager.hpp
+	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
-mendel_gpu_denovo.o: mendel_gpu_denovo.cpp clsafe.h cl_constants.h
-	$(C_COMPILER) $(INC_FLAGS) $(PREPROC) -c $<
+#c_interface.o: c_interface.cpp mendel_gpu.hpp clsafe.h cl_constants.h
+#	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
-mendel_gpu_guide.o: mendel_gpu_guide.cpp clsafe.h cl_constants.h
-	$(C_COMPILER) $(INC_FLAGS) $(PREPROC) -c $<
+bam_dummyinterface.o: bam_dummyinterface.c bam_interface.h
+	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
 clsafe.o: clsafe.c clsafe.h
-	$(C_COMPILER) $(INC_FLAGS) $(PREPROC) -c $<
+	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
 clean:
+	for dir in $(DIRS); do(cd $$dir; rm *.o  || exit 1) || exit 1; done
 	rm -f $(PROGRAM) $(OBJS) *.mod

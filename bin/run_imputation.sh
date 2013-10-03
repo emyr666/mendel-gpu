@@ -34,12 +34,13 @@ do
     gunzip -c $KGP_DIR'/hap.chr'$chr'.part'$part'.gz' > kgp.hap
     for((chunk=$startchunk;chunk<=$endchunk;++chunk))
     do
-      merged_gz=$IMPUTATION_DATA'/'$study'/chr.'$chr_code'.chunk.'$chunk'.gz'
+      merged_gz=$IMPUTATION_DATA'/'$study'_phased/phasing.merged.'$chr_code'.'$chunk'.gz'
       if [[ -f $merged_gz && ! -f $imputed_results'/quality.chr'$chr'.part'$part'.chunk'$chunk'.gz' ]] ; then
         echo Prepping inputfiles for Chr $chr_code Region $part Subjectchunk $chunk
-        gunzip -c $merged_gz > study.mec
-        #cp $IMPUTATION_DATA'/'$study'_phased/snplist.merged.'$chr_code study.snplist
-        prep_swiftgpu_input.sh $chr_code kgp.legend kgp.hap mec study
+exit 0
+        gunzip -c $merged_gz > study.phasing
+        cp $IMPUTATION_DATA'/'$study'_phased/snplist.merged.'$chr_code study.snplist
+        prep_swiftgpu_input.sh $chr_code kgp.legend kgp.hap phasing study
         cut -f2 out.genotype.info |sed '1d' > $imputed_results'/snplist.chr'$chr'.part'$part
         # do imputation
         people=`head -n1 out.genotype.data|cut -f1`
@@ -49,8 +50,8 @@ do
         if [ $remainder -gt 0 ] ; then
           let total_regions=$total_regions+1
         fi
-        echo Running diploid imputation on $people persons $snps SNPs $total_regions regions with remainder $remainder
-        cat settings.imputation | sed "s/geno_dim/3/" | sed "s/people/$people/" | sed "s/snps/$snps/" | sed "s/total_regions/$total_regions/" |sed "s/infile_haploid/$infile_haploid/" > settings.txt
+        echo Running haploid imputation on $people persons $snps SNPs $total_regions regions with remainder $remainder
+        cat settings.imputation | sed "s/people/$people/" | sed "s/snps/$snps/" | sed "s/total_regions/$total_regions/" |sed "s/infile_haploid/$infile_haploid/" > settings.txt
         impute 1>impute.out 2>impute.debug
        # post process files
         cat QUALITY |gzip -c - > $imputed_results'/quality.chr'$chr'.part'$part'.chunk'$chunk'.gz'
