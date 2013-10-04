@@ -12,6 +12,7 @@ MendelGPU::MendelGPU(IO_manager * io){
 
 void MendelGPU::run_sliding_window(){
   cerr<<"Running sliding window on "<<g_snps<<" SNPs with "<<g_flanking_snps<<" flanking SNPs\n";
+
   g_markers = 0;
   cerr<<"center snp start,right_marker,left_marker: "<<g_center_snp_start<<","<<g_right_marker<<","<<g_left_marker<<endl;
   //while(g_center_snp_start<10){
@@ -22,7 +23,7 @@ void MendelGPU::run_sliding_window(){
     init_window();
     bool converged = false;
     int iter = 0;
-    int max_iter = 5;
+    int max_iter = 10;
     do{
       if (iter==0) compute_penetrance(); 
       compute_haplotype_weights_(&iter);

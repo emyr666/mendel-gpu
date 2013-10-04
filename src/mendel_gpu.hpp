@@ -321,27 +321,17 @@ private:
 };
 
 class ReadParser;
+  // for BAM files
 class DenovoReadsMendelGPU:public DenovoMendelGPU{
 public:
   DenovoReadsMendelGPU(IO_manager *io);
   ~DenovoReadsMendelGPU();
 private:
   ReadParser *  parsers;
-  // for BAM files
-  static const int MAX_READS = 100;
-  //int g_max_reads;
-  int * g_reads_alleles;
-  float * g_reads_errors;
-  // for the BAM files, there may be redundant reads 
-  int * g_unique_reads;
-  int * g_unique_reads_counts;
-  int * g_unique_reads_alleles;
-  float * g_unique_reads_errors;
-  float * g_unique_reads_logpenetrance;
-
-  //void impute_genotypes();
   void allocate_memory();
   void init_opencl();
+  void populate_read_matrices();
+  void process_read_matrices();
   void compute_penetrance();
   void init_window();
 
@@ -349,6 +339,15 @@ private:
   // functions for penetrance calculations of reads
   float get_bam_loglikelihood(int len,float *  hap1prob,float *  hap2prob);
   float log_half;
+  int compact_rows;
+  int full_rows;
+  int read_compact_matrix_size;
+  int read_full_matrix_size;
+  int * superread_indices;
+  int * read_alleles_mat; // has superreads rows
+  float * read_match_logmat; // has superreads*subreads rows
+  float * read_mismatch_logmat;// has superreads*subreads rows
+  int * mat_rows_by_subject;
 };
 
 class DenovoGlfMendelGPU:public DenovoMendelGPU{
