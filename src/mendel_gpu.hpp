@@ -23,11 +23,13 @@ public:
 protected:
   virtual void allocate_memory();
   virtual void init_opencl();
+  virtual void init_window_opencl();
   virtual void load_datasets()=0;
   virtual void init_window();
   virtual void compute_penetrance()=0;
   virtual void impute_genotypes()=0;
   virtual void finalize_window();
+  virtual int get_max_window_size()=0;
   // custom data structures
   struct hapobj_t{
     string hapstr;
@@ -36,25 +38,26 @@ protected:
     int array_index;
     set<string> extended_set;
   };
-  static const int HAPLOTYPE_MODE_DENOVO = 0;
-  static const int HAPLOTYPE_MODE_GUIDE = 1;
+  // deprecate these
   static const int UNPHASED_INPUT = 3;
   static const int PHASED_INPUT = 4;
+  //static const int HAPLOTYPE_MODE_DENOVO = 0;
+  //static const int HAPLOTYPE_MODE_GUIDE = 1;
+  string FORMAT_DEFAULT;
+  string FORMAT_MEC;
 
   IO_manager * io_manager;
   Config  * config;
 
   // constants
-  float epsilon;
-  float convergence_criterion;
-  float log_half;
-  string FORMAT_DEFAULT;
-  string FORMAT_MEC;
-  float logpenetrance_threshold;
+  float gf_epsilon;
+  float gf_convergence_criterion;
+  float gf_logpen_threshold;
   bool debug_mode;
   bool debug_truth;
   bool run_gpu;
   bool run_cpu;
+  int gi_iteration;
   int g_snps;
   int g_flanking_snps;
   int g_people;
@@ -81,7 +84,6 @@ protected:
   float * penetrance_cache;
   float * logpenetrance_cache;
   int * haploid_arr;
-  float * g_snp_penetrance;
   //float * g_region_snp_penetrance;
   //int g_region_snp_offset;
   int g_genotype_imputation;
@@ -110,9 +112,8 @@ protected:
   cl::Program * program;
   cl::Kernel * kernel_simple;
   cl::Kernel * kernel_compute_weights;
-  cl::Kernel * kernel_compute_weights_haploid;
+  //cl::Kernel * kernel_compute_weights_haploid;
   cl::Kernel * kernel_reduce_weights2;
-  template<class T> cl::Buffer * createBuffer(int rw,int dim,const char * label);
   cl::Buffer * buffer_simple_in;
   cl::Buffer * buffer_simple_out;
   cl::Buffer * buffer_markers;
@@ -125,14 +126,19 @@ protected:
   cl::Buffer * buffer_frequency;
   cl::Buffer * buffer_penetrance_cache;
   cl::Buffer * buffer_logpenetrance_cache;
-  cl::Buffer * buffer_frequency_cache;
 
-  //cl::Buffer * buffer_region_snp_penetrance;
-  //cl::Buffer * buffer_region_snp_offset;
   cl::Buffer * buffer_genotype_imputation;
   cl::Buffer * buffer_max_penetrance;
   cl::Buffer * buffer_haploid_arr;
   cl::Buffer * buffer_iteration;
+
+  void createKernel(const char * name, cl::Kernel * & kernel);
+  void runKernel(const char * name, cl::Kernel * & kernel,int wg_x,int wg_y, int wg_z, int wi_x,int wi_y, int wi_z);
+  template<class T> void createBuffer(int rw,int dim,const char * label,cl::Buffer * & buf);
+  template<typename T> void setArg(cl::Kernel * & kernel,int & index,T arg,const char * label);
+  template<typename T> void writeToBuffer(cl::Buffer * & buffer,int dim,T hostArr,const char * label);
+  template<typename T> void readFromBuffer(cl::Buffer * & buffer,int dim,T hostArr,const char * label);
+  
 
   #endif
 
@@ -169,24 +175,26 @@ private:
   bool check_mm_converged();
     
   // this functions are first called by the fortran wrapper
-  void init_gpu_(int * platform_id, int * device_id);
+  //void init_gpu_(int * platform_id, int * device_id);
   // just a simple test to see that the GPU is working
-  void run_simple_(int * scaler, int * return_vec);
+  //void run_simple_(int * scaler, int * return_vec);
   // this function loads settings from the configuration file
   // and stores the values in global variables that are visible
   // to the fortran wrapper. It also loads the datasets in to memory.
-  void load_constants_(int * model, int * people,int * snps, int * total_regions,int * haplotype_mode, int * flanking_snps,int * max_haplotypes,int * max_extended_haplotypes,int * platform_id, int * device_id, float * delta, float * lambda, int * i_geno_dim);
+  //void load_constants_(int * model, int * people,int * snps, int * total_regions,int * haplotype_mode, int * flanking_snps,int * max_haplotypes,int * max_extended_haplotypes,int * platform_id, int * device_id, float * delta, float * lambda, int * i_geno_dim);
 
   // allocates data structures for the host and the GPU
-  void init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps,  int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, int * window2,int * prev_right_marker,float * frequency, float * weight, int * haplotype,int * flanking_snps);
+  //void init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps,  int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, int * window2,int * prev_right_marker,float * frequency, float * weight, int * haplotype,int * flanking_snps);
   // allocates region specific data structures for the host and the GPU
   //void init_region_buffers_(int * regionstart,int * regionend);
   // allocates window specific data structures for the host and the GPU
-  void init_window_buffers_();
+  //void init_window_buffers_();
   // allocates iteration specific data structures for the host and the GPU
-  void init_iteration_buffers_();
+  void init_iteration_buffers();
+  void init_iteration_buffers_opencl();
   // functions for computing haplotype frequencies
-  void compute_haplotype_weights_(int * iteration);
+  void compute_haplotype_weights();
+  void compute_haplotype_weights_opencl();
 
 };
 
@@ -214,6 +222,7 @@ private:
   int * extended_root_mapping;
   std::tr1::unordered_map<string,int > ref_hap_counts;
   std::tr1::unordered_map<string,set<string> > full_hap_window;
+  float * g_snp_penetrance;
   int ref_haplotypes;
   char * ref_haplotype;
   int g_max_extended_haplotypes;
@@ -230,21 +239,25 @@ private:
   cl::Buffer * buffer_extended_frequency;
   cl::Buffer * buffer_center_snp_end;
   cl::Buffer * buffer_packedextendedhap;
+  cl::Buffer * buffer_snp_penetrance;
   cl::Buffer * buffer_subject_posterior_prob_block;
   cl::Buffer * buffer_subject_genotype_block;
   cl::Buffer * buffer_subject_dosage_block;
   cl::Kernel * kernel_precompute_penetrance;
-  cl::Kernel * kernel_precompute_penetrance_haploid;
+  //cl::Kernel * kernel_precompute_penetrance_haploid;
   cl::Kernel * kernel_impute_genotype_guide;
-  cl::Kernel * kernel_impute_genotype_guide_haploid;
+  //cl::Kernel * kernel_impute_genotype_guide_haploid;
   #endif
   void init_window();
   void finalize_window();
   void impute_genotypes();
+  void impute_genotypes_opencl();
   void load_datasets();
   void allocate_memory();
   void init_opencl();
+  void init_window_opencl();
   void compute_penetrance();
+  int get_max_window_size();
   // allocates data structures for the host and the GPU
   void init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps,  int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, int * window2,int * prev_right_marker,float * frequency, float * weight, int * haplotype,int * flanking_snps);
   // functions for reference based haplotyping
@@ -255,12 +268,17 @@ private:
   void compress(int hapindex,int markers,int * haplotype);
   void decompress(int hapindex,int markers,int * haplotype);
   void precompute_penetrance();
+  void precompute_penetrance_opencl();
   // genotype imputation with ref haplotypes
   void prep_impute_genotypes_guide();
-  void impute_diploid_genotypes_guide(int  center_snp_start, 
-  int  center_snp_end, int  center_snp_offset);
-  void impute_haploid_genotypes_guide(int  center_snp_start, 
-  int  center_snp_end, int  center_snp_offset);
+  void prep_impute_genotypes_guide_opencl();
+  void impute_genotypes_guide();
+  void impute_genotypes_guide_opencl();
+
+  //void impute_diploid_genotypes_guide(int  center_snp_start, 
+  //int  center_snp_end, int  center_snp_offset);
+  //void impute_haploid_genotypes_guide(int  center_snp_start, 
+  //int  center_snp_end, int  center_snp_offset);
   //utility functions
   void compress_extendedhap(int extendedhapindex,int begin,int end,int * extendedhaplotype);
 };
@@ -293,9 +311,9 @@ protected:
   virtual void init_window();
 
   void finalize_window();
-  void load_datasets();
   // functions for de novo haplotyping
   void impute_genotypes();
+  void impute_genotypes_opencl();
   void double_haplotypes();
   void prune_haplotypes_();
   // init opencl
@@ -307,7 +325,7 @@ protected:
   void debug_haplotypes(ostream & os);
 
   cl::Kernel * kernel_impute_genotype_denovo;
-  cl::Kernel * kernel_impute_genotype_denovo_haploid;
+  //cl::Kernel * kernel_impute_genotype_denovo_haploid;
   cl::Buffer * buffer_subject_posterior_prob;
   cl::Buffer * buffer_subject_genotype;
   cl::Buffer * buffer_subject_dosage;
@@ -318,6 +336,7 @@ protected:
   cl::Buffer * buffer_twin_hap_index;
   cl::Buffer * buffer_prev_left_marker;
 private:
+  int get_max_window_size();
 };
 
 class ReadParser;
@@ -337,6 +356,7 @@ private:
 
 private:
   // functions for penetrance calculations of reads
+  void load_datasets();
   float get_bam_loglikelihood(int len,float *  hap1prob,float *  hap2prob);
   float log_half;
   int compact_rows;
@@ -356,11 +376,13 @@ public:
   ~DenovoGlfMendelGPU();
 private:
   // class variables
+  float * g_snp_penetrance;
   #ifdef USE_GPU
   cl::Kernel * kernel_precompute_penetrance_fast;
-  cl::Kernel * kernel_precompute_penetrance_fast_haploid;
+  //cl::Kernel * kernel_precompute_penetrance_fast_haploid;
   cl::Kernel * kernel_impute_penetrance;
-  cl::Kernel * kernel_impute_penetrance_haploid;
+  //cl::Kernel * kernel_impute_penetrance_haploid;
+  cl::Buffer * buffer_snp_penetrance;
   #endif
   // allocates data structures for the host and the GPU
   //void impute_genotypes();
@@ -368,7 +390,7 @@ private:
   void init_opencl();
   void compute_penetrance();
 
-  //void load_datasets();
+  void load_datasets();
   //void init_window();
   //void finalize_window();
   //void init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps,  int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, int * window2,int * prev_right_marker,float * frequency, float * weight, int * haplotype,int * flanking_snps);
@@ -378,8 +400,10 @@ private:
   void init_window_buffers_();
   // functions for penetrance calculations of SNP data
   // with no ref haps
-  void precompute_penetrance_fast(int center_snp);
   void impute_penetrance_matrix();
+  void precompute_penetrance_fast();
+  void impute_penetrance_matrix_opencl();
+  void precompute_penetrance_fast_opencl();
 
 };
 
@@ -392,3 +416,4 @@ inline char hapint2char(int i){
 inline int hapchar2int(char c){
   return (int)c-(int)'0';
 }
+

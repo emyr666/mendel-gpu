@@ -1,9 +1,6 @@
 #include"../cl_constants.h"
 #include"../io_manager.hpp"
 #include"../mendel_gpu.hpp"
-#ifdef USE_GPU
-#include"../clsafe.h"
-#endif
 
 MendelGPU::MendelGPU(IO_manager * io){
   this->io_manager = io;
@@ -22,16 +19,17 @@ void MendelGPU::run_sliding_window(){
     g_markers = window_size;
     init_window();
     bool converged = false;
-    int iter = 0;
+    gi_iteration = 0;
     int max_iter = 10;
     do{
-      if (iter==0) compute_penetrance(); 
-      compute_haplotype_weights_(&iter);
+      if (gi_iteration==0) compute_penetrance(); 
+      compute_haplotype_weights();
       converged = check_mm_converged();
-      cerr<<"MM iteration "<<iter<<" and convergence "<<converged<<endl;
-      ++iter;
-    }while(iter<max_iter && !converged);
-    if (converged) cerr<<"Converged at iteration: "<<iter<<endl;
+      init_iteration_buffers();
+      cerr<<"MM iteration "<<gi_iteration<<" and convergence "<<converged<<endl;
+      ++gi_iteration;
+    }while(gi_iteration<max_iter && !converged);
+    if (converged) cerr<<"Converged at iteration: "<<gi_iteration<<endl;
     else cerr<<"Frequencies did not converge\n";
     if (g_center_snp_start>0 || g_center_snp_end+g_flanking_snps==g_right_marker)
     impute_genotypes();
@@ -43,45 +41,45 @@ void MendelGPU::run_sliding_window(){
 
 }
 
-template<class T> cl::Buffer * MendelGPU::createBuffer(int rw, int dim, const char * label){
-  cl::Buffer * buf = new cl::Buffer(*context, rw, sizeof(T) * dim, NULL, &err);
-  clSafe(err,label);
-  return buf;
-}
-
 void MendelGPU::init(){
   allocate_memory();
+  if(run_gpu){
+  // initialize the GPU if necessary
+#ifdef USE_GPU
+    init_opencl();
+#endif
+  }
 }
 
 void MendelGPU::allocate_memory(){
   cerr<<"initialize all the variables in base class\n";
-  epsilon = 1e-10;
-  convergence_criterion = 1e-4;
-  log_half = log(.5);
-  FORMAT_DEFAULT="default";
-  FORMAT_MEC="mec";
-  logpenetrance_threshold = -10;
+  gf_epsilon = 1e-10;
+  gf_convergence_criterion = 1e-4;
+  gf_logpen_threshold = -10;
   debug_mode = false;
   debug_truth = false;
   // this will provide the base path for the kernels
-  load_datasets();
   imputation_software = getenv("IMPUTATION_SOFTWARE");
-  g_genotype_imputation = config->model==1?1:0;
+  cerr<<"Software base path is at "<<imputation_software<<endl;
   run_gpu = config->use_gpu;
   run_cpu = config->use_cpu;
-  g_likelihood_mode = config->g_likelihood_mode;
-  g_snps = io_manager->get_total_snps();
   g_flanking_snps = config->flanking_snps;
-  g_people = io_manager->get_total_persons();
-  g_haplotype_mode = HAPLOTYPE_MODE_DENOVO;
-  if (config->use_reference_panel) g_haplotype_mode = HAPLOTYPE_MODE_GUIDE;
+  g_max_window = get_max_window_size();
+  cerr<<"max window size is "<<g_max_window<<endl;
+  g_genotype_imputation = config->model==1?1:0;
+  g_likelihood_mode = config->g_likelihood_mode;
   g_delta = config->delta;
   geno_dim = config->is_phased?4:3;
   g_max_haplotypes = config->max_haplotypes;
-  // allocation
+  // load data sets
+  load_datasets();
+  // allocation begins here
+  g_haplotype = new int[g_max_haplotypes*g_max_window];  
   g_frequency = new float[g_max_haplotypes];
   g_old_frequency = new float[g_max_haplotypes];
   g_active_haplotype = new int[g_max_haplotypes];
+  haploid_arr = new int[g_people];
+  for(int i=0;i<g_people;++i)haploid_arr[i] = 0;
   penetrance_matrix_size = 0;
   if (geno_dim==PHASED_INPUT){ // for phased input
     cerr<<"Allocating penetrances for phased input\n";
@@ -108,12 +106,6 @@ void MendelGPU::allocate_memory(){
     g_frequency[j] = 1./g_haplotypes;
   }
   cerr<<"Allocated base class memory\n";
-  if(run_gpu){
-  // initialize the GPU if necessary
-#ifdef USE_GPU
-    init_opencl();
-#endif
-  }
   return;
 }
 
@@ -189,37 +181,6 @@ void MendelGPU::testpacked(){
   exit(0);
 }
 
-
-void MendelGPU::load_constants_(int * model, int * people,int * snps, int * total_regions,int * haplotype_mode, int * flanking_snps,int * max_haplotypes,int * max_extended_haplotypes,int * platform_id, int * device_id, float * delta, float * lambda, int * i_geno_dim){
-}
-
-// function called from main fortran program
-//
-void MendelGPU::init_gpu_(int * platform_id, int * device_id){
-}
-
-void MendelGPU::run_simple_(int * scaler, int * return_vec){
-#ifdef USE_GPU
-  cl_int err;
-  //cerr<<"Scaler: "<<scaler[0];
-  for(int i=0;i<256;++i){
-    //return_vec[i]*=scaler[0];
-    //cerr<<i<<":"<<return_vec[i]<<" ";
-  }
-  cerr<<endl;
-  err = commandQueue->enqueueWriteBuffer(*buffer_simple_in, CL_TRUE, sizeof(int)*0,  sizeof(int)*1, scaler, NULL, NULL );
-  clSafe(err, "write scaler");
-  err = commandQueue->enqueueWriteBuffer(*buffer_simple_out, CL_TRUE, sizeof(int)*0,  sizeof(int)*BLOCK_WIDTH, return_vec, NULL, NULL );
-  clSafe(err, "write vector");
-  err = commandQueue->enqueueNDRangeKernel(*kernel_simple,cl::NullRange,cl::NDRange(BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-  clSafe(err,"launch simple kernel");
-  cerr<<"launched kernel\n";
-  err = commandQueue->enqueueReadBuffer(*buffer_simple_out, CL_TRUE, 0, BLOCK_WIDTH*sizeof(int),return_vec);
-  clSafe(err, "read test vec");
-  cerr<<"Read buffer\n";
-#endif
-}
-
 void MendelGPU::unmarshall(ifstream & ifs_cache, float * outputvec,int len){
   char * charvec = reinterpret_cast<char * >(outputvec);
   ifs_cache.read(charvec,sizeof(float) * len);
@@ -233,13 +194,9 @@ void MendelGPU::init_window(){
   for(int j=0;j<g_max_haplotypes;++j) g_old_frequency[j] = g_frequency[j];
 }
 
-void MendelGPU::init_iteration_buffers_(){
+void MendelGPU::init_iteration_buffers(){
   if (run_gpu){
-#ifdef USE_GPU
-  err = commandQueue->enqueueWriteBuffer(*buffer_frequency, CL_TRUE, 0,  sizeof(float)*g_max_haplotypes, g_frequency, NULL, NULL );
-  clSafe(err, "write haplotype frequencies");
-#endif
-  cerr<<"Iteration Buffers sent to GPU\n";
+    init_iteration_buffers_opencl();
   }
 }
 

@@ -8,12 +8,12 @@ using namespace std;
 int dim;
 int n,m;
 float * inputmatrix;
-const float epsilon = .001;
-const float log_epsilon=log(epsilon);
+const float gf_epsilon = .001;
+const float log_gf_epsilon=log(gf_epsilon);
 
 float convert(float raw){
   float logval;
-  if (raw<epsilon) logval = log_epsilon;
+  if (raw<gf_epsilon) logval = log_gf_epsilon;
   else logval = log(raw);
   return logval;
 }

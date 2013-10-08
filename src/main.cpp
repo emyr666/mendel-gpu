@@ -2,7 +2,7 @@
 #include"cl_constants.h"
 #include"mendel_gpu.hpp"
 #ifdef USE_GPU
-#include"clsafe.h"
+#include"cl_templates.hpp"
 #endif
 
 

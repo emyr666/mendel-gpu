@@ -2,17 +2,19 @@
 #include"../io_manager.hpp"
 #include"../mendel_gpu.hpp"
 
+int DenovoMendelGPU::get_max_window_size(){
+  return 2 * g_flanking_snps+1;
+}
+
 void DenovoMendelGPU::allocate_memory(){
   MendelGPU::allocate_memory();
   cerr<<"Initializing variables for denovo haplotyper\n";
-  g_max_window = 2 * g_flanking_snps+1;
-  g_haplotype = new int[g_max_haplotypes*g_max_window];
   twin_hap_index = new int[g_max_haplotypes];
   beyond_left_edge_dosage = new int[g_max_haplotypes];
   right_edge_dosage = new int[g_max_haplotypes];
   center_dosage = new int[g_max_haplotypes];
 
-  g_haplotype_mode = HAPLOTYPE_MODE_DENOVO;
+  //g_haplotype_mode = HAPLOTYPE_MODE_DENOVO;
   occupied_hap_indices.clear();
   free_hap_indices.clear();
   occupied_hap_indices.push_back(0);
@@ -39,11 +41,6 @@ DenovoMendelGPU::~DenovoMendelGPU(){
   cerr<<"Exiting destructor denovo haplotyper\n";
 }
 
-void DenovoMendelGPU::load_datasets(){
-  char * c=NULL;
-  bool * i = NULL;
-  io_manager->read_input(c,g_snp_penetrance,i,haploid_arr);
-}
 
 void DenovoMendelGPU::init_window(){
   double_haplotypes();
@@ -51,8 +48,6 @@ void DenovoMendelGPU::init_window(){
   char zero = '0';
   int offset = (int)zero;
   //g_haplotype = haplotype;
-  int left_marker = g_left_marker;
-  int prev_left_marker = g_prev_left_marker;
   bool debug_haplotype = false;
   if (debug_haplotype){
     if (debug_mode) ofs_debug_haplotype_file<<"ASSUMED DOUBLED HAPLOTYPES:\n";
@@ -68,12 +63,11 @@ void DenovoMendelGPU::init_window(){
       }
     }
   }
-  cerr<<"Max_window: "<<g_max_window<<" Haplotypes: "<<g_haplotypes<<" Markers: "<<g_markers<<" left_marker: "<<left_marker<<endl;
-  return;
-  //if (g_markers>4) exit(0);
   if (run_gpu){
     init_window_opencl();
   }
+  cerr<<"Max_window: "<<g_max_window<<" Haplotypes: "<<g_haplotypes<<" Markers: "<<g_markers<<" left_marker: "<<g_left_marker<<endl;
+  return;
 
 }
 

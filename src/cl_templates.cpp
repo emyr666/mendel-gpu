@@ -1,7 +1,10 @@
 #include<iostream>
 #include<fstream>
+#include"cl_constants.h"
+#include"io_manager.hpp"
+#include"mendel_gpu.hpp"
 #ifdef USE_GPU
-#include"clsafe.h"
+#include"cl_templates.hpp"
 #endif
 
 using namespace std;
@@ -70,4 +73,23 @@ void clSafe (cl_int rc, string functionname) {
     exit(EXIT_FAILURE);
   }
 }
+
+void MendelGPU::createKernel(const char * name, cl::Kernel * & kernel){
+  ostringstream oss;
+  oss<<"Creating kernel "<<name;
+  string mesg = oss.str();
+  cerr<<mesg<<endl;
+  kernel = new cl::Kernel(*program,name,&err);
+  clSafe(err,oss.str().data());
+}
+
+void MendelGPU::runKernel(const char * name, cl::Kernel * & kernel,int wg_x,int wg_y, int wg_z, int wi_x,int wi_y, int wi_z){
+  ostringstream oss;
+  oss<<"Launching kernel "<<name;
+  string mesg = oss.str();
+  cerr<<mesg<<endl;
+  err = commandQueue->enqueueNDRangeKernel(*kernel,cl::NullRange,cl::NDRange(wg_x,wg_y,wg_z),cl::NDRange(wi_x,wi_y,wi_z),NULL,NULL);
+  clSafe(err,oss.str().data());
+}
+
 #endif

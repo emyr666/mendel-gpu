@@ -6,6 +6,13 @@
 DenovoReadsMendelGPU::DenovoReadsMendelGPU(IO_manager * io):DenovoMendelGPU(io){
 }
 
+
+void DenovoReadsMendelGPU::load_datasets(){
+  io_manager->read_input(this->g_people,this->g_snps);
+  cerr<<"Loaded input in DenovoReadsMendelGPU\n";
+}
+
+
 DenovoReadsMendelGPU::~DenovoReadsMendelGPU(){
   cerr<<"Entering destructor denovo reads haplotyper\n";
   delete[] parsers;
@@ -19,6 +26,7 @@ void DenovoReadsMendelGPU::allocate_memory(){
   cerr<<"Initializing variables for denovo reads haplotyper\n";
   cerr<<"Analysis on "<<g_snps<<" SNPs and "<<g_people<<" persons\n";
   log_half = log(.5);
+
   string variants = config->bimfile;
   ReadParser::parse_positions(variants.data());
   ReadParser::init_phred_lookup(g_max_window);

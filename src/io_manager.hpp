@@ -8,21 +8,6 @@ using namespace std;
 struct Config{
   static const int LIKELIHOOD_MODE_GENOTYPES = 0;
   static const int LIKELIHOOD_MODE_READS = 1;
-//  int get_model_id();
-//  int get_total_regions();
-//  bool enable_reference_panel();
-//  int get_flanking_snps();
-//  int get_max_haplotypes();
-//  int get_max_ref_haplotypes();
-//  int get_platform_id();
-//  int get_device_id();
-//  int get_delta();
-//  int get_lambda();
-//  bool is_genotype_phased();
-//  bool is_runcpu();
-//  bool is_rungpu();
-//  string get_inputformat();
-//private:
   int model;
   bool use_reference_panel;
   string chromosome;
@@ -62,11 +47,16 @@ public:
   IO_manager();
   ~IO_manager();
   bool load_config(const char * config_filename);
+  // for guide haplotypes
   bool read_input(char * & hap_arr, float * & snp_penetrance, 
-  bool * & informative_snp, int * & haploid_arr);
-  int get_total_persons();
-  int get_total_snps();
-  int get_total_refhaplotypes();
+  bool * & informative_snp,int & persons, int & snps, int & total_ref_haps);
+  // for denovo haplotypes glf
+  bool read_input(float * & snp_penetrance,int & persons, int & snps);
+  // for denovo haplotypes reads
+  bool read_input(int & persons, int & snps);
+  //int get_total_persons();
+  //int get_total_snps();
+  //int get_total_refhaplotypes();
   vector<int> get_positions();
   Config * config;
   void writePosterior(int geno_len,int snp_index,float * val,int len);
@@ -82,6 +72,8 @@ private:
   map<int,vector<float> > penetrance_map;
   vector<int> position_vector;
   template<class ofs_T,class array_T> void write_output(ofs_T & ofs,int snp_index,int geno_len,int array_len, array_T * vals);
+  bool read_input(char * & hap_arr, float * & snp_penetrance, 
+  bool * & informative_snp,int * & haploid_arr,int & persons, int & snps, int & total_ref_haps);
   void parse_ref_haplotypes(const char * legend, const char * hapfile);
   void parse_plink(const char * famfile,const char * bimfile, const char * bedfile, bool * & informative_snp);
   void parse_glf(const char * famfile,const char * bimfile, bool is_phased, const char * glf,bool * & informative_snp);

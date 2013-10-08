@@ -1,23 +1,4 @@
-
-using namespace std;
-#include<iostream>
-#include<fstream>
-#include<sstream>
-#include<vector>
-#include<queue>
-#include<tr1/unordered_set>
-#include<tr1/unordered_map>
-#include<set>
-#include<map>
-#include<list>
-#include<math.h>
 #include"../cl_constants.h"
-#include<cstdlib>
-#include<string.h>
-#ifdef USE_GPU
-#include<CL/cl.hpp>
-#include"../clsafe.h"
-#endif
 #include"../io_manager.hpp"
 #include"../mendel_gpu.hpp"
 
@@ -30,7 +11,7 @@ bool MendelGPU::check_mm_converged(){
   for(int j=0;j<g_max_haplotypes;++j){
     if (g_active_haplotype[j]){
       //cerr<<"Current weight of hap "<<j<<" is "<<g_weight[j]<<endl;
-      if (g_weight[j]<epsilon) g_weight[j] = epsilon;
+      if (g_weight[j]<gf_epsilon) g_weight[j] = gf_epsilon;
       if (g_frequency[j] > g_delta) d+=g_weight[j];
       else e+=g_weight[j];
     }
@@ -43,7 +24,7 @@ bool MendelGPU::check_mm_converged(){
       if (g_active_haplotype[j]){
         g_frequency[j] = g_frequency[j]>g_delta?g_weight[j]/(t-g_lambda*q):g_weight[j]/(t-g_lambda*q+g_lambda);
         //cerr<<"1 Assigning new freq "<<j<<" of "<<g_frequency[j]<<endl;
-        if(g_frequency[j]<epsilon) g_frequency[j] = epsilon;
+        if(g_frequency[j]<gf_epsilon) g_frequency[j] = gf_epsilon;
         
       }
     }
@@ -66,7 +47,7 @@ bool MendelGPU::check_mm_converged(){
   }
   t/=g_haplotypes;
   cerr<<"MM: T is "<<t<<endl;
-  if (t<convergence_criterion) return true;
+  if (t<gf_convergence_criterion) return true;
   else{
     for(int j=0;j<g_max_haplotypes;++j){
       g_old_frequency[j] = g_frequency[j];
@@ -75,65 +56,23 @@ bool MendelGPU::check_mm_converged(){
   return false;
 }
 
-void MendelGPU::compute_haplotype_weights_(int * iteration){
+void MendelGPU::compute_haplotype_weights(){
+  if (run_gpu){
+    compute_haplotype_weights_opencl();
+  }
   bool b_impute = g_genotype_imputation;
-  cerr<<"begin compute_weights at iteration: "<<iteration[0]<<"\n";
+  cerr<<"begin compute_weights at iteration: "<<gi_iteration<<"\n";
   //cerr<<"Geno dim is "<<geno_dim<<endl;
   //return;
   bool debug_personhap = false;
-  //bool debug_personhap = iteration[0]==2;
+  //bool debug_personhap = gi_iteration==2;
   //bool debug_personhap = g_haplotypes<-4;
   int debug_person = 10;
   bool debug_weights = g_haplotypes<-4;
   bool debug_freq = g_haplotypes<-4;
-  if (run_gpu){
-    double start = clock();
-    #ifdef USE_GPU
-    err = commandQueue->enqueueWriteBuffer(*buffer_iteration, CL_TRUE, 0,sizeof(int), iteration, NULL, NULL );
-    clSafe(err, "write iteration");
-    if (geno_dim==PHASED_INPUT){
-      // for phased input
-      err = commandQueue->enqueueNDRangeKernel(*kernel_compute_weights_haploid,cl::NullRange,cl::NDRange(g_people*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-      clSafe(err,"launch compute_weights");
-    }else if (geno_dim==UNPHASED_INPUT){
-      // for unphased input
-      err = commandQueue->enqueueNDRangeKernel(*kernel_compute_weights,cl::NullRange,cl::NDRange(g_people*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-      clSafe(err,"launch compute_weights");
-    }
-    cerr<<"Launched compute_haplotype_weights\n";
-    if (debug_personhap){
-      float subject_haplotype_weight[g_people*g_max_haplotypes];
-      err = commandQueue->enqueueReadBuffer(*buffer_subject_haplotype_weight, CL_TRUE, 0, sizeof(float)*g_people*g_max_haplotypes,subject_haplotype_weight);
-      clSafe(err, "read subject_hap weight");
-      float haplotype_weight[g_max_haplotypes];
-      memset(haplotype_weight,0,sizeof(float)*g_max_haplotypes);
-      for(int i = 0;i<g_people;++i){
-        for(int j=0;j<g_max_haplotypes;++j){
-          if (g_active_haplotype[j]){
-            cout<<"GPU person "<<i<<" hap "<<j<<" weight "<<subject_haplotype_weight[i*g_max_haplotypes+j]<<endl;
-            haplotype_weight[j]+=subject_haplotype_weight[i*g_max_haplotypes+j];
-          }
-        }
-      }
-    }
-    err = commandQueue->enqueueNDRangeKernel(*kernel_reduce_weights2,cl::NullRange,cl::NDRange(BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-    clSafe(err,"launch reduce_weights");
-    cerr<<"Launched reduce_weights\n";
-    err = commandQueue->enqueueReadBuffer(*buffer_haplotype_weight, CL_TRUE, 0, sizeof(float)*g_max_haplotypes,g_weight);
-    clSafe(err, "read hap weight");
-    if (debug_weights){
-      for(int j=0;j<g_max_haplotypes;++j){
-        if (g_active_haplotype[j]){
-          cout<<"GPU hap "<<j<<" weight "<<g_weight[j]<<endl;
-        }
-      }
-    }
-    cerr<<"Elapsed time: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
-    #endif
-  }
   if(run_cpu){
     memset(g_weight,0,sizeof(float)*g_max_haplotypes);
-    if (iteration[0]==0){
+    if (gi_iteration==0){
       memset(subject_haplotype_weight,0,sizeof(float)*g_people*g_max_haplotypes);
     }
     //for(int i=0;i<0;++i){
@@ -160,7 +99,7 @@ void MendelGPU::compute_haplotype_weights_(int * iteration){
       float likelihood = 0;
       memset(g_current_weight,0,sizeof(float)*g_max_haplotypes);
       for(int j=0;j<g_max_haplotypes;++j){
-        if (g_active_haplotype[j] && (iteration[0]==0 || subject_haplotype_weight[i*g_max_haplotypes+j]>0)){
+        if (g_active_haplotype[j] && (gi_iteration==0 || subject_haplotype_weight[i*g_max_haplotypes+j]>0)){
           if(geno_dim==PHASED_INPUT){
             for(int parent=0;parent<2;++parent){
               float penetrance = penetrance_cache[i*2*g_max_haplotypes+
@@ -175,7 +114,7 @@ void MendelGPU::compute_haplotype_weights_(int * iteration){
           }else if (geno_dim==UNPHASED_INPUT){
             for(int k=j;k<g_max_haplotypes;++k){
               if (g_active_haplotype[k] &&
-              (iteration[0]==0 || 
+              (gi_iteration==0 || 
               subject_haplotype_weight[i*g_max_haplotypes+k]>0)){
                 float penetrance = (haploid_arr[i] || j==k) ?
                 penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k]
@@ -195,7 +134,7 @@ void MendelGPU::compute_haplotype_weights_(int * iteration){
         }
       }
       for(int j=0;j<g_max_haplotypes;++j){
-        if (g_active_haplotype[j] && (iteration[0]==0 || 
+        if (g_active_haplotype[j] && (gi_iteration==0 || 
         subject_haplotype_weight[i*g_max_haplotypes+j]>0)){
             subject_haplotype_weight[i*g_max_haplotypes+j] = 
             g_current_weight[j];

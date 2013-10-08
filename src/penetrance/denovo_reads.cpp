@@ -3,7 +3,7 @@
 #include"../mendel_gpu.hpp"
 #include"../read_penetrance.hpp"
 #ifdef USE_GPU
-#include"../clsafe.h"
+#include"../cl_templates.hpp"
 #endif
 
 
@@ -109,44 +109,6 @@ void DenovoReadsMendelGPU::process_read_matrices(){
             //if (debug) cerr<<"current log like "<<ll<<endl; 
             log_like+=ll;
           }
-
-
-//          float logprob_matrix1[total_depth*total_width];
-//          float logprob_matrix2[total_depth*total_width];
-//          for(int i=0;i<total_depth*total_width;++i){
-//            logprob_matrix1[i] = logprob_matrix2[i] = 0;
-//          }
-//          int expanded_row = 0;
-//          for(uint matrow=0;matrow<parser.matrix_rows;++matrow){
-//            int offset = parser.offset[matrow];
-//            if(debug) cerr<<"Working on main read "<<matrow<<" with offset "<<offset<<endl;
-//            // first get the depth of main read
-//            int depth = parser.depth[matrow];
-//            for(uint readindex=0;readindex<depth;++readindex){
-//              for(uint baseindex=0;baseindex<parser.read_len[matrow];
-//              ++baseindex){
-//                // APPROACH 1: GPU friendly
-//                int phredscore = parser.base_quality[matrow][readindex][baseindex];
-//                //if(debug) cerr<<"Phred score is "<<phredscore<<endl;
-//                logprob_matrix1[expanded_row*total_width+baseindex]=g_haplotype[hap1*g_max_window+offset+baseindex]==
-//                parser.matrix_alleles[matrow*parser.max_matrix_width+offset+baseindex]? 
-//                (parser.logprob_match_lookup[phredscore]):
-//                (parser.logprob_mismatch_lookup[phredscore]);
-//                logprob_matrix2[expanded_row*total_width+baseindex] =g_haplotype[hap2*g_max_window+offset+baseindex]==
-//                parser.matrix_alleles[matrow*parser.max_matrix_width+offset+baseindex]? 
-//                (parser.logprob_match_lookup[phredscore]):
-//                (parser.logprob_mismatch_lookup[phredscore]);
-//
-//              }
-//              ++expanded_row;
-//            }   
-//          } 
-//          float log_like = 0;
-//          for(expanded_row=0;expanded_row<total_depth;++expanded_row){
-//            log_like+=get_bam_loglikelihood(total_width,
-//            logprob_matrix1+expanded_row*total_width,
-//            logprob_matrix2+expanded_row*total_width);
-//          }
           if(debug) cerr<<"Log likelihood of all reads for haps "<<hap1<<","<<hap2<<" is "<<log_like<<endl;
           if (log_like>max_log_pen) max_log_pen = log_like;
           logpenetrance_cache[subject*penetrance_matrix_size+hap1*g_max_haplotypes+hap2] = log_like;
@@ -164,7 +126,7 @@ void DenovoReadsMendelGPU::process_read_matrices(){
           logpenetrance_cache[subject*penetrance_matrix_size+hap2*
           g_max_haplotypes+hap1] = val;
           penetrance_cache[subject*penetrance_matrix_size+hap1*
-          g_max_haplotypes+hap2] = val>=logpenetrance_threshold?exp(val):0;
+          g_max_haplotypes+hap2] = val>=gf_logpen_threshold?exp(val):0;
           penetrance_cache[subject*penetrance_matrix_size+hap2*
           g_max_haplotypes+hap1] = penetrance_cache[subject*
           penetrance_matrix_size+hap1*g_max_haplotypes+hap2];

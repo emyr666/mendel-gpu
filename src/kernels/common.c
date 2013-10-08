@@ -3,6 +3,10 @@
 // from the algorithm
 
 //#include "cl_constants.h"
+//
+
+#ifdef phased
+#endif
 
 __kernel void simple(
 __constant int * scaler,
@@ -22,9 +26,10 @@ __constant int * genotype_imputation,
 __constant int * markers,
 __constant int * haplotypes,
 __constant int * left_marker,
+#ifdef unphased
 __global int * haploid_arr,
+#endif
 __global int * haplotype,
-__global float * snp_penetrance,
 __global float * frequency,
 __global float * penetrance_cache,
 __global float * subject_haplotype_weight,
@@ -37,7 +42,9 @@ __local float * local_penetrance_block,
 __local float * local_likelihood
 ) {
   int subject = get_group_id(0);
+#ifdef unphased
   int haploid = haploid_arr[subject];
+#endif
   int threadindex = get_local_id(0);
   // INITIALIZE HAPLOTYPE SPECIFIC VARIABLES
   for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
@@ -59,11 +66,14 @@ __local float * local_likelihood
   float likelihood = 0;
   if(threadindex==0) local_likelihood[0] = 0;
   barrier(CLK_LOCAL_MEM_FENCE);
+#ifdef unphased
   for(int righthapindex=0;righthapindex<max_haplotypes;++righthapindex){
     if (local_active_haplotype[righthapindex] && 
     (iteration[0]==1 || local_cached_marginals[righthapindex]>0)){
+#endif
       local_penetrance_block[threadindex] = 0;
       for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
+#ifdef unphased
         int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
         if (lefthapindex<=righthapindex&&local_active_haplotype[lefthapindex]
         &&(iteration[0]==1||local_cached_marginals[lefthapindex]>0)){
@@ -80,81 +90,8 @@ __local float * local_likelihood
             local_penetrance_block[threadindex]+=prob;
           }
         }
-        barrier(CLK_LOCAL_MEM_FENCE);
-      }
-      // LOG2 REDUCTION
-      for(int s=BLOCK_WIDTH/2; s>0; s>>=1) {
-        if (threadindex<s) {
-          local_penetrance_block[threadindex]+=local_penetrance_block[threadindex+s];
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
-      }
-      if(threadindex==0){
-        local_marginals[righthapindex]+=local_penetrance_block[threadindex];
-        local_likelihood[threadindex]+=local_penetrance_block[threadindex];
-      }
-      barrier(CLK_LOCAL_MEM_FENCE);
-    }
-  }
-  for(int chunk=0;chunk<max_haplotypes/BLOCK_WIDTH+1;++chunk){
-    int hapindex = chunk*BLOCK_WIDTH+threadindex;
-    if (hapindex<max_haplotypes){
-      subject_haplotype_weight[subject*max_haplotypes+hapindex] = 
-      local_likelihood[0]>0?local_marginals[hapindex] / local_likelihood[0]
-      : 0;
-      //local_marginals[hapindex] ;
-    }
-  }
-  return;
-}
-
-__kernel void compute_weights_haploid(
-__const int max_haplotypes,
-__const int max_window,
-__const int penetrance_matrix_size,
-__constant int * iteration,
-__constant int * genotype_imputation,
-__constant int * markers,
-__constant int * haplotypes,
-__constant int * left_marker,
-__global int * haplotype,
-__global float * snp_penetrance,
-__global float * frequency,
-//__global float * frequency_cache,
-__global float * penetrance_cache,
-__global float * subject_haplotype_weight,
-__global int * active_haplotype,
-__local int * local_active_haplotype,
-__local float * local_cached_marginals,
-__local float * local_frequency,
-__local float * local_marginals,
-__local float * local_penetrance_block,
-__local float * local_likelihood
-) {
-  int subject = get_group_id(0);
-  int threadindex = get_local_id(0);
-  // INITIALIZE HAPLOTYPE SPECIFIC VARIABLES
-  for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
-    int hapindex = chunk*BLOCK_WIDTH+threadindex;
-    if (hapindex<max_haplotypes){
-      local_active_haplotype[hapindex] = active_haplotype[hapindex];
-    }
-  }
-  barrier(CLK_LOCAL_MEM_FENCE);
-  for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
-    int hapindex = chunk*BLOCK_WIDTH+threadindex;
-    if (hapindex<max_haplotypes && local_active_haplotype[hapindex]){
-      local_frequency[hapindex] = frequency[hapindex];
-      local_marginals[hapindex] = 0;
-      local_cached_marginals[hapindex] = iteration[0]==1?0:
-      subject_haplotype_weight[subject*max_haplotypes+hapindex];
-    }
-  }
-  float likelihood = 0;
-  if(threadindex==0) local_likelihood[0] = 0;
-  barrier(CLK_LOCAL_MEM_FENCE);
-  local_penetrance_block[threadindex] = 0;
-  for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
+#endif
+#ifdef phased
     int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
     if (lefthapindex<max_haplotypes&&local_active_haplotype[lefthapindex]
     &&(iteration[0]==1||local_cached_marginals[lefthapindex]>0)){
@@ -168,19 +105,27 @@ __local float * local_likelihood
         }
       }
     }
-    barrier(CLK_LOCAL_MEM_FENCE);
-  }
-  // LOG2 REDUCTION
-  for(int s=BLOCK_WIDTH/2; s>0; s>>=1) {
-    if (threadindex<s) {
-      local_penetrance_block[threadindex]+=local_penetrance_block[threadindex+s];
+#endif
+        barrier(CLK_LOCAL_MEM_FENCE);
+      }
+      // LOG2 REDUCTION
+      for(int s=BLOCK_WIDTH/2; s>0; s>>=1) {
+        if (threadindex<s) {
+          local_penetrance_block[threadindex]+=local_penetrance_block[threadindex+s];
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+      }
+      if(threadindex==0){
+#ifdef unphased
+        local_marginals[righthapindex]+=local_penetrance_block[threadindex];
+#endif
+        local_likelihood[threadindex]+=local_penetrance_block[threadindex];
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+#ifdef unphased
     }
-    barrier(CLK_LOCAL_MEM_FENCE);
   }
-  if(threadindex==0){
-    local_likelihood[threadindex]+=local_penetrance_block[threadindex];
-  }
-  barrier(CLK_LOCAL_MEM_FENCE);
+#endif
   for(int chunk=0;chunk<max_haplotypes/BLOCK_WIDTH+1;++chunk){
     int hapindex = chunk*BLOCK_WIDTH+threadindex;
     if (hapindex<max_haplotypes){

@@ -8,8 +8,8 @@
 #include<math.h>
 using namespace std;
 
-const float epsilon = .001;
-const float log_epsilon = log(epsilon);
+const float gf_epsilon = .001;
+const float log_gf_epsilon = log(gf_epsilon);
 const float log_third = log(.3);
 //const char * filename_reflegend;
 //const char * filename_refhap;
@@ -304,8 +304,8 @@ void parse_glf(const char * filename){
         float phred;
         iss>>phred;
         float pen = pow(10,phred/10);
-        penetrances_snpmajor[j*3*persons+3*i+k] = pen<epsilon?
-        log_epsilon:log(pen);
+        penetrances_snpmajor[j*3*persons+3*i+k] = pen<gf_epsilon?
+        log_gf_epsilon:log(pen);
       }
     }
   }
@@ -333,13 +333,13 @@ void write_output(){
           if (i) ofs_geno2<<"\t";
           switch(record2.genotypes[i]){
             case 1:
-              ofs_geno2<<0<<"\t"<<log_epsilon<<"\t"<<log_epsilon;
+              ofs_geno2<<0<<"\t"<<log_gf_epsilon<<"\t"<<log_gf_epsilon;
               break;
             case 2:
-              ofs_geno2<<log_epsilon<<"\t"<<0<<"\t"<<log_epsilon;
+              ofs_geno2<<log_gf_epsilon<<"\t"<<0<<"\t"<<log_gf_epsilon;
               break;
             case 3:
-              ofs_geno2<<log_epsilon<<"\t"<<log_epsilon<<"\t"<<0;
+              ofs_geno2<<log_gf_epsilon<<"\t"<<log_gf_epsilon<<"\t"<<0;
               break;
             default :
               ofs_geno2<<log_third<<"\t"<<log_third<<"\t"<<log_third;

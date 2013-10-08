@@ -75,17 +75,17 @@ void IO_manager::writeQuality(int snp_index,float  val){
 }
 
 
-int IO_manager::get_total_snps(){
-  return this->snps;
-}
-
-int IO_manager::get_total_persons(){
-  return this->persons;
-}
-
-int IO_manager::get_total_refhaplotypes(){
-  return this->refhaplotypes;
-}
+//int IO_manager::get_total_snps(){
+//  return this->snps;
+//}
+//
+//int IO_manager::get_total_persons(){
+//  return this->persons;
+//}
+//
+//int IO_manager::get_total_refhaplotypes(){
+//  return this->refhaplotypes;
+//}
 
 bool IO_manager::load_config(const char * xmlfile){
   cerr<<"Initializing configuration from XML file\n";
@@ -168,7 +168,36 @@ bool IO_manager::load_config(const char * xmlfile){
   return true;
 }
 
-bool IO_manager::read_input(char * & haplotype_array, float * & snp_penetrance, bool * & informative_snp, int * & haploid_arr){
+// for guide haplotypes
+bool IO_manager::read_input(char * & hap_arr, float * & snp_penetrance,
+bool * & informative_snp,int & persons, int & snps, int & total_ref_haps){
+  int * haploids = NULL;
+  bool ret = read_input(hap_arr, snp_penetrance,
+  informative_snp,haploids, persons, snps, total_ref_haps);
+  return ret;
+}
+// for denovo haplotypes glf
+bool IO_manager::read_input(float * & snp_penetrance,int & persons, int & snps){
+  char * hap_arr = NULL;
+  int * haploids = NULL;
+  bool * informative_snp = NULL;
+  int total_ref_haps;
+  return read_input(hap_arr, snp_penetrance,
+  informative_snp,haploids, persons, snps, total_ref_haps);
+}
+// for denovo haplotypes reads
+bool IO_manager::read_input(int & persons, int & snps){
+  char * hap_arr = NULL;
+  float * snp_penetrance = NULL; 
+  bool * informative_snp = NULL;
+  int * haploids = NULL;
+  int total_ref_haps;
+  return read_input(hap_arr, snp_penetrance,
+  informative_snp,haploids, persons, snps, total_ref_haps);
+}
+
+// private function
+bool IO_manager::read_input(char * & haplotype_array, float * & snp_penetrance, bool * & informative_snp, int * & haploid_arr, int & total_persons,int & total_snps,int & total_ref_haplotypes){
   try{
     if (config->use_reference_panel){
       haplotype_map.clear();
@@ -184,6 +213,8 @@ bool IO_manager::read_input(char * & haplotype_array, float * & snp_penetrance, 
           haplotype_array[h*snps+j] = hapstr[h];
         }
       }
+      total_ref_haplotypes = this->refhaplotypes;
+      
     }
   }catch (const exception & e){
     cerr<<"Caught an exception attempting to parse ref haplotypes: "<<e.what()<<"\n";
@@ -201,15 +232,17 @@ bool IO_manager::read_input(char * & haplotype_array, float * & snp_penetrance, 
       load_bam_settings(config->famfile.data(), 
       config->bimfile.data(), config->bamfilevec, informative_snp);
     }
+    total_persons = this->persons;
+    total_snps = this->snps;
   }catch (const exception & e){
     cerr<<"Caught an exception attempting to parse study data: "<<e.what()<<"\n";
     return false;
   }
   try{
     cerr<<"Loading penetrances...\n";
-    float epsilon = 1e-10;
-    float callprob = 1.-epsilon;
-    float log_zero = log(epsilon);
+    float gf_epsilon = 1e-10;
+    float callprob = 1.-gf_epsilon;
+    float log_zero = log(gf_epsilon);
     float log_one = log(callprob);
     if(config->inputformat.compare("plink")==0 || 
       config->inputformat.compare("glf")==0){
@@ -464,8 +497,9 @@ void IO_manager::parse_plink(const char * famfile,const char * bimfile, const ch
     if (config->use_reference_panel)informative_snp[j] = true;
     if (genotype_map.find(position)==genotype_map.end()){
       cerr<<"Will impute position "<<position<<" at index "<<j<<endl;
+      cerr<<"informative_snp "<<j<<":"<<informative_snp[j]<<endl;
       genotype_map[position] = oss_geno.str();
-      if (config->use_reference_panel) informative_snp[j] = false;
+      if (!config->use_reference_panel) informative_snp[j] = false;
     }
     ++j;
   }
@@ -568,9 +602,9 @@ int main2(int argc,char * argv[]){
   float * snp_penetrance;
   bool * info_snp;
   int * hap_arr;
-  manager->read_input(haplotypes,snp_penetrance,info_snp,hap_arr);
-  int snps = manager->get_total_snps();
-  int persons = manager->get_total_persons();
+  //manager->read_input(haplotypes,snp_penetrance,info_snp,hap_arr);
+  int snps = 100;
+  int persons = 100;
   for(int i=0;i<persons;++i){
     for(int j=0;j<snps;++j){
       cerr<<" ";

@@ -15,3 +15,8 @@ DenovoGlfMendelGPU::~DenovoGlfMendelGPU(){
   cerr<<"Exiting destructor denovo GLF haplotyper\n";
 
 }
+
+void DenovoGlfMendelGPU::load_datasets(){
+  io_manager->read_input(g_snp_penetrance,this->g_people,this->g_snps);
+}
+
