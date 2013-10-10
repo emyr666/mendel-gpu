@@ -10,23 +10,23 @@ void DenovoGlfMendelGPU::compute_penetrance(){
 void DenovoGlfMendelGPU::precompute_penetrance_fast(){
   cerr<<"Entering precompute_penetrance_fast on center_snp "<<g_center_snp_start<<"\n";
   int last_marker = g_markers-1;
-  cerr<<"Taking hap doses at site "<<last_marker<<" and prev and current left marker: "<<g_prev_left_marker<<","<<g_left_marker<<"\n";
-  cerr<<"right edge dosage: ";
+  //cerr<<"Taking hap doses at site "<<last_marker<<" and prev and current left marker: "<<g_prev_left_marker<<","<<g_left_marker<<"\n";
+  //cerr<<"right edge dosage: ";
   for(int j=0;j<g_max_haplotypes;++j){
     if(g_active_haplotype[j] ){
       right_edge_dosage[j] = g_haplotype[j*g_max_window+last_marker]; 
-      cerr<<" "<<right_edge_dosage[j];
-    }
+      //cerr<<" "<<right_edge_dosage[j];
+    } 
   }
-  cerr<<endl;
+  //cerr<<endl;
   if (run_gpu){
 #ifdef USE_GPU
     precompute_penetrance_fast_opencl();
 #endif
   }
-  int debug_penmat_person = 3;
-  bool debug_penmat = g_markers==-6;
-  //bool debug_penmat = g_left_marker==-2;
+  int debug_penmat_person = 0;
+  //bool debug_penmat = g_markers==-6;
+  bool debug_penmat = g_left_marker==-91;
   if(run_cpu){
     double start = clock();
     for(int i=0;i<g_people;++i){

@@ -29,6 +29,8 @@ void DenovoMendelGPU::init_opencl(){
     setArg(kernel_impute_genotype_denovo,arg,g_max_window,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,gf_epsilon,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,penetrance_matrix_size,"kernel_impute_genotype_denovo");
+    int dim = g_genotype_imputation?3:4;
+    setArg(kernel_impute_genotype_denovo,arg,dim,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,*buffer_genotype_imputation,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,*buffer_markers,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,*buffer_haplotypes,"kernel_impute_genotype_denovo");

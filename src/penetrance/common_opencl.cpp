@@ -12,24 +12,34 @@ void MendelGPU::compute_haplotype_weights_opencl(){
   cerr<<"begin compute_weights at iteration: "<<gi_iteration<<"\n";
   //cerr<<"Geno dim is "<<geno_dim<<endl;
   //return;
-  bool debug_personhap = false;
+  bool debug_personhap = g_left_marker<0;
   //bool debug_personhap = gi_iteration==2;
   //bool debug_personhap = g_haplotypes<-4;
-  int debug_person = 10;
-  bool debug_weights = g_haplotypes<-4;
-  bool debug_freq = g_haplotypes<-4;
+  int debug_person = 0;
+  bool debug_weights = false;
+  bool debug_freq = false;
   if (run_gpu){
     double start = clock();
     #ifdef USE_GPU
-    err = commandQueue->enqueueWriteBuffer(*buffer_iteration, CL_TRUE, 0,sizeof(int), &gi_iteration, NULL, NULL );
-    clSafe(err, "write iteration");
-    err = commandQueue->enqueueNDRangeKernel(*kernel_compute_weights,cl::NullRange,cl::NDRange(g_people*BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-    clSafe(err,"launch compute_weights");
-    cerr<<"Launched compute_haplotype_weights\n";
+    cerr<<"Iteration is "<<gi_iteration<<endl;
+    writeToBuffer(buffer_iteration, 1, &gi_iteration, "buffer_iteration" );
+    writeToBuffer(buffer_frequency,g_max_haplotypes,g_frequency,"buffer_frequency");
+    runKernel("kernel_compute_weights",kernel_compute_weights,g_people*BLOCK_WIDTH,1,1,BLOCK_WIDTH,1,1);
+    if (debug_freq){
+      int active[g_max_haplotypes];
+      readFromBuffer(buffer_active_haplotype,g_max_haplotypes,active,"buffer_active_haplotype");
+      float freq[g_max_haplotypes];
+      readFromBuffer(buffer_frequency,g_max_haplotypes,freq,"buffer_frequency");
+      for(int j=0;j<g_max_haplotypes;++j){
+        if (active[j]){
+          if (debug_freq) cout<<"Freq "<<j<<":"<<freq[j]<<endl;
+        }
+      }
+    }
     if (debug_personhap){
+    //runKernel("kernel_compute_weights",kernel_compute_weights,g_people*BLOCK_WIDTH,1,1,BLOCK_WIDTH,1,1);
       float subject_haplotype_weight[g_people*g_max_haplotypes];
-      err = commandQueue->enqueueReadBuffer(*buffer_subject_haplotype_weight, CL_TRUE, 0, sizeof(float)*g_people*g_max_haplotypes,subject_haplotype_weight);
-      clSafe(err, "read subject_hap weight");
+      readFromBuffer(buffer_subject_haplotype_weight, g_people*g_max_haplotypes,subject_haplotype_weight,"buffer_subject_haplotype_weight");
       float haplotype_weight[g_max_haplotypes];
       memset(haplotype_weight,0,sizeof(float)*g_max_haplotypes);
       for(int i = 0;i<g_people;++i){
@@ -41,11 +51,9 @@ void MendelGPU::compute_haplotype_weights_opencl(){
         }
       }
     }
-    err = commandQueue->enqueueNDRangeKernel(*kernel_reduce_weights2,cl::NullRange,cl::NDRange(BLOCK_WIDTH,1),cl::NDRange(BLOCK_WIDTH,1),NULL,NULL);
-    clSafe(err,"launch reduce_weights");
+    runKernel("kernel_reduce_weights2",kernel_reduce_weights2,BLOCK_WIDTH,1,1,BLOCK_WIDTH,1,1);
     cerr<<"Launched reduce_weights\n";
-    err = commandQueue->enqueueReadBuffer(*buffer_haplotype_weight, CL_TRUE, 0, sizeof(float)*g_max_haplotypes,g_weight);
-    clSafe(err, "read hap weight");
+    readFromBuffer(buffer_haplotype_weight, g_max_haplotypes,g_weight,"buffer_haplotype_weight");
     if (debug_weights){
       for(int j=0;j<g_max_haplotypes;++j){
         if (g_active_haplotype[j]){
@@ -57,6 +65,4 @@ void MendelGPU::compute_haplotype_weights_opencl(){
     #endif
   }
   //cerr<<"done do_iteration\n";
-  if (debug_personhap||debug_weights) exit(1);
-  if (debug_freq) exit(1);
 }

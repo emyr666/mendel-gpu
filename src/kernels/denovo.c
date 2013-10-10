@@ -3,6 +3,7 @@ __const int max_haplotypes,
 __const int max_window,
 __const float epsilon,
 __const int penetrance_matrix_size,
+__const int geno_dim,
 __constant int * genotype_imputation,
 __constant int * markers,
 __constant int * haplotypes,
@@ -40,7 +41,7 @@ __local float * local_denom
       local_active_haplotype[hapindex] = active_haplotype[hapindex];
     }
   }
-  if(threadindex==0) local_denom[threadindex]=epsilon;
+  if (threadindex==0) local_denom[threadindex]=0;
   barrier(CLK_LOCAL_MEM_FENCE);
   for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
     int hapindex = chunk*BLOCK_WIDTH+threadindex;
@@ -123,19 +124,23 @@ __local float * local_denom
     }
     barrier(CLK_LOCAL_MEM_FENCE);
   }
+  if (threadindex<4){
+    local_posterior_prob[threadindex] = epsilon;
+  }
   if (threadindex==0){
 //    int geno1 = local_center_dosage[bestpair[0].maternal] +
 //              local_center_dosage[bestpair[0].paternal];
 //    subject_genotype[subject] = geno1; 
     // MOVE THESE INTO AN ARRAY OF 3 FOR CONVENIENT ACCESS
-    local_posterior_prob[0] = local_posterior_prob0[threadindex];
-    local_posterior_prob[1] = local_posterior_prob1[threadindex];
-    local_posterior_prob[2] = local_posterior_prob2[threadindex];
-    local_posterior_prob[3] = local_posterior_prob3[threadindex];
+    local_posterior_prob[0] += local_posterior_prob0[threadindex];
+    local_posterior_prob[1] += local_posterior_prob1[threadindex];
+    local_posterior_prob[2] += local_posterior_prob2[threadindex];
+    local_posterior_prob[3] += local_posterior_prob3[threadindex];
+    local_denom[0] = 0;
 #ifdef unphased
     float max_prob = 0;
     int geno2 = 0;
-    for(int h=0;h<4;++h){
+    for(int h=0;h<geno_dim;++h){
       if(local_posterior_prob[h]>max_prob){
         max_prob = local_posterior_prob[h];
         geno2 = h;
@@ -150,10 +155,15 @@ __local float * local_denom
 #endif
   }
   //barrier(CLK_LOCAL_MEM_FENCE);
-  if(threadindex<4){
+  if(threadindex<geno_dim){
+    //local_denom[0] = 1;
     subject_posterior_prob[subject*4+threadindex] = 
+    //local_posterior_prob[threadindex];
+    //local_denom[0];
+    //subject_posterior_prob[subject*4+threadindex] = 
     local_posterior_prob[threadindex]/local_denom[0];
     //local_posterior_prob[threadindex];
+    //epsilon;
   }
   return;
 }

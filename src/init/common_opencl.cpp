@@ -83,6 +83,7 @@ void MendelGPU::init_opencl(){
       string buffer;
       program->getBuildInfo(devices[0],CL_PROGRAM_BUILD_LOG,&buffer);
       cerr<<buffer<<endl;
+      throw "Aborted from OpenCL build fail.";
     }
     // CREATE KERNELS
     createKernel("simple",kernel_simple);
@@ -185,6 +186,7 @@ void MendelGPU::init_window_opencl(){
     writeToBuffer(buffer_markers, 1, &g_markers, "buffer_markers" );
     writeToBuffer(buffer_left_marker, 1, &g_left_marker, "buffer_left_marker");
     writeToBuffer(buffer_haplotype, g_max_window*g_max_haplotypes, g_haplotype, "buffer_haplotype");
+    writeToBuffer(buffer_frequency, g_max_haplotypes, g_frequency, "buffer_frequency");
     #endif
     cerr<<"Buffers sent to GPU for current window\n";
   }

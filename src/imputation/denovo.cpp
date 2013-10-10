@@ -12,13 +12,13 @@ void DenovoMendelGPU::impute_genotypes(){
   int c_snp = g_center_snp_start-g_left_marker;
   int current_snp = g_center_snp_start;
   cerr<<"begin diploid impute_genotypes at SNP "<<current_snp<<", center: "<<c_snp<<endl;
-  //return ;
   bool debug_dosage = false;
   bool debug_geno = false;
-  bool debug_posterior = false;
-  bool debug_pen = current_snp == -3;
-  int max_geno=g_genotype_imputation?3:4;
-  cerr<<"Max geno "<<max_geno<<endl;
+  bool debug_posterior = current_snp==-94;
+  bool debug_pen = false; 
+  bool debug_subject = 0;
+  int geno_dim = g_genotype_imputation?3:4;
+  cerr<<"Max geno "<<geno_dim<<endl;
   for(int i=0;i<g_max_haplotypes;++i){
     center_dosage[i] = g_haplotype[i*g_max_window+c_snp];
   }
@@ -27,8 +27,8 @@ void DenovoMendelGPU::impute_genotypes(){
     //if (g_likelihood_mode==Config::LIKELIHOOD_MODE_READS && 
     //  window_polymorphisms[c_snp]){
     float dosages[g_people];
-    int genotypes[g_people*max_geno];
-    float posteriors[g_people*max_geno];
+    int genotypes[g_people*geno_dim];
+    float posteriors[g_people*geno_dim];
 //    if (outfile_format.compare(FORMAT_MEC)==0){
 //      ofs_dosage_file<<current_snp<<"\t";
 //      ofs_genotype_file<<current_snp<<"\t";
@@ -40,7 +40,7 @@ void DenovoMendelGPU::impute_genotypes(){
       float posterior_prob[4];
       int best_pair[2];
       best_pair[0] = best_pair[1] = 0;
-      memset(posterior_prob,0,sizeof(float)*4);
+      for(int j=0;j<4;++j) posterior_prob[j] = gf_epsilon;
       for(int j=0;j<g_max_haplotypes;++j){
         if(g_active_haplotype[j] ){
           for(int k=j;k<g_max_haplotypes;++k){
@@ -63,46 +63,31 @@ void DenovoMendelGPU::impute_genotypes(){
                 }else{
                   m = 2*center_dosage[j] + center_dosage[k];
                 }
-                if (debug_pen) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
+                if (debug_pen && debug_subject==i) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
                 posterior_prob[m]+=p;
               }
             }
           }
         }
       }
-      // assume base genotype for non polymorphisms in sequencing data
-      //if (g_likelihood_mode==Config::LIKELIHOOD_MODE_READS && 
-      //!window_polymorphisms[c_snp]){
-        //cerr<<"Assuming non polymorphism for this sequenced site\n";
-        //posterior_prob[0] = 1;
-        //for(int j=1;j<max_geno;++j){
-         // posterior_prob[j] = 0;
-        //}
-      //}else{
-        //cerr<<"Assuming polymorphism for this sequenced site\n";
-        //cerr<<"CPU POSTERIOR "<<current_snp<<","<<i;
-        //for(int j=0;j<max_geno;++j){
-          //cerr<<" "<<posterior_prob[j];
-        //}
-       // cerr<<endl;
-        
-      //}
-      //float denom = 0;
-      float denom = gf_epsilon;
-      for(int m=0;m<max_geno;++m){
+      float denom = 0;
+      for(int m=0;m<geno_dim;++m){
         //if (posterior_prob[m]<gf_epsilon) posterior_prob[m] = gf_epsilon;
         denom+=posterior_prob[m];
       }
+      for(int j=0;j<geno_dim;++j){
+        posterior_prob[j]/=denom;
+      }
       if (debug_posterior){
         cout<<"CPU_POSTERIOR "<<current_snp<<","<<i;
-        for(int j=0;j<max_geno;++j){
-          cout<<" "<<posterior_prob[j]/denom;
+        for(int j=0;j<geno_dim;++j){
+          cout<<" "<<posterior_prob[j];
         }
         cout<<endl;
       }
       if (denom==0) {
         cerr<<"divide by zero denom\n"; 
-        for(int m=0;m<max_geno;++m){
+        for(int m=0;m<geno_dim;++m){
           cerr<<"posterior for geno "<<m<<": "<<posterior_prob[m]<<endl;
         }
         cerr<<"hap1,hap2:pen,logpen,freq,genotype\n";
@@ -121,29 +106,10 @@ void DenovoMendelGPU::impute_genotypes(){
         }
         exit(1);
       }
-//      float dose = 0;
-//      if (outfile_format.compare(FORMAT_MEC)==0){
-//        for(int j=0;j<max_geno;++j){
-//          float p = posterior_prob[j]/denom;
-//          ofs_posterior_file<<"\t"<<p;
-//          dose+=j*p;
-//        }
-//        char chardose =  (int)(dose*10)+'A';
-//        ofs_dosage_file<<chardose;
-//      }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-//        ofs_posterior_file<<"CPU_POSTERIOR\t"<<i<<"\t"<<current_snp;
-//        for(int j=0;j<max_geno;++j){
-//          float p = posterior_prob[j]/denom;
-//          ofs_posterior_file<<"\t"<< p;
-//          dose+=j*p;
-//        }
-//        ofs_dosage_file<<"CPU_DOSE:\t"<<i<<"\t"<<current_snp<<"\t"<<dose<<endl;
-//        ofs_posterior_file<<endl;
-//      }
       dosages[i] = 0;
-      for(int j=0;j<max_geno;++j){
-        float p = posterior_prob[j]/denom;
-        posteriors[i*max_geno+j] = p;
+      for(int j=0;j<geno_dim;++j){
+        float & p = posterior_prob[j];
+        posteriors[i*geno_dim+j] = p;
         dosages[i]+=j*p;
       }
       if (debug_dosage){
@@ -155,15 +121,7 @@ void DenovoMendelGPU::impute_genotypes(){
         if (posterior_prob[j]>maxval) maxval = posterior_prob[j];
       }
       if (maxval>0){
-        //int j = best_pair[0];
-        //int k = best_pair[1];
-        //cerr<<"best prob "<<best_prob<<" "<<c_snp<<" "<<j<<" "<<k<<" "<<g_haplotype[j*g_max_window+ c_snp] <<" "<<g_haplotype[k*g_max_window+ c_snp]<<endl;
         int geno1= -1;
-        //int geno1 = g_genotype_imputation?
-        //g_haplotype[j*g_max_window+ c_snp] +
-        //g_haplotype[k*g_max_window+ c_snp]:
-        //2*g_haplotype[j*g_max_window+ c_snp] +
-        //g_haplotype[k*g_max_window+ c_snp];
         float max_prob = posterior_prob[0];
         int geno2 = 0;
         for(int h=1;h<4;++h){
@@ -176,33 +134,19 @@ void DenovoMendelGPU::impute_genotypes(){
           cout<<"CPU GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<geno1<<","<<geno2<<endl;
         }
         genotypes[i] = geno2;
-        //if (outfile_format.compare(FORMAT_MEC)==0){
-        //  ofs_genotype_file<<geno2;
-        //}else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-         // ofs_genotype_file<<"CPU_GENO\t"<<i<<"\t"<<current_snp<<"\t"<<geno2<<endl;;
-        //}
-        
-        //ofs_genotype_file<<"CPU_GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<geno1<<","<<geno2<<"\t"<<best_pair[0]<<","<<best_pair[1]<<endl;
       }
     }
-    if (max_geno==3){
+    if (geno_dim==3){
       io_manager->writeDosage(current_snp,dosages,g_people);
       io_manager->writeGenotype(current_snp,genotypes,g_people);
     }
-    io_manager->writePosterior(max_geno,current_snp,posteriors,g_people);
-    //if (outfile_format.compare(FORMAT_MEC)==0){
-    //  ofs_dosage_file<<endl;
-    //  ofs_genotype_file<<endl;
-    //  ofs_posterior_file<<endl; 
-    //}
+    io_manager->writePosterior(geno_dim,current_snp,posteriors,g_people);
     float rsq = compute_rsq(dosages,1,0);
-    //ofs_quality_file<<current_snp<<"\t"<<rsq<<endl;
     io_manager->writeQuality(current_snp,rsq);
   }//END CPU VERSION
   cerr<<"done impute_geno\n";
   if (debug_dosage || debug_posterior|| debug_geno) exit(1);
   if (debug_pen) {
-    if (debug_mode) ofs_debug_haplotype_file.close();
     exit(1);
   }
 }

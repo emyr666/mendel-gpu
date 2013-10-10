@@ -34,6 +34,9 @@ int main(int argc,char * argv[]){
     }
     haplotyper->init();
     haplotyper->run_sliding_window();
+  }catch(const char * & mesg){
+    cerr<<"Caught an exception with message "<<mesg<<endl;
+    return 1;
   }catch(exception e){
     cerr<<"Caught an exception with message "<<e.what()<<endl;
     return 1;

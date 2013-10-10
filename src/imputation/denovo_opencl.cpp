@@ -12,7 +12,7 @@ void DenovoMendelGPU::impute_genotypes_opencl(){
   //return ;
   bool debug_dosage = false;
   bool debug_geno = false;
-  bool debug_posterior = false;
+  bool debug_posterior = current_snp==-94;
   bool debug_pen = current_snp == -3;
   int max_geno=g_genotype_imputation?3:4;
   cerr<<"Max geno "<<max_geno<<endl;
@@ -29,6 +29,12 @@ void DenovoMendelGPU::impute_genotypes_opencl(){
     runKernel("kernel_impute_genotype_denovo",kernel_impute_genotype_denovo,g_people*BLOCK_WIDTH,1,1,BLOCK_WIDTH,1,1);
     cerr<<"Launched impute_genotype_denovo\n";
     readFromBuffer(buffer_subject_posterior_prob, g_people*4,subject_posterior,"buffer_subject_posterior_prob");
+    float posterior[g_people*max_geno];
+    for(int i=0;i<g_people;++i){
+      for(int j=0;j<max_geno;++j){
+        posterior[i*max_geno+j] = subject_posterior[i*4+j];
+      }
+    }
     if (debug_posterior){
       float * debug_pen = new float[g_people*penetrance_matrix_size];
       readFromBuffer(buffer_penetrance_cache,g_people*penetrance_matrix_size,debug_pen,"buffer_penetrance_cache");
@@ -58,17 +64,6 @@ if (g_active_haplotype[i] && g_active_haplotype[j]){
         cout<<"GPU GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_genotypes[i]<<endl;
       }
     }
-    if (outfile_format.compare(FORMAT_MEC)==0){
-      ofs_genotype_file<<current_snp<<"\t";
-      for(int i=0;i<g_people;++i){
-        ofs_genotype_file<<subject_genotypes[i];
-      }
-      ofs_genotype_file<<endl;
-    }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-      for(int i=0;i<g_people;++i){
-        ofs_genotype_file<<"GPU_GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_genotypes[i]<<endl;
-      }
-    }
     if (g_genotype_imputation){
       readFromBuffer(buffer_subject_dosage, g_people,subject_dosages,"buffer_subject_dosage");
     }
@@ -77,6 +72,13 @@ if (g_active_haplotype[i] && g_active_haplotype[j]){
         cout<<"GPU_DOSAGE:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_dosages[i]<<endl;
       }
     }
+    if (max_geno==3){
+      io_manager->writeDosage(current_snp,subject_dosages,g_people);
+      io_manager->writeGenotype(current_snp,subject_genotypes,g_people);
+    }
+    io_manager->writePosterior(max_geno,current_snp,posterior,g_people);
+    float rsq = compute_rsq(subject_dosages,1,0);
+    io_manager->writeQuality(current_snp,rsq);
     cerr<<"Elapsed time: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
     #endif
   }

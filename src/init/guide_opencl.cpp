@@ -22,7 +22,6 @@ void GuidedMendelGPU::init_opencl(){
     createBuffer<int>(CL_MEM_READ_ONLY,1,"buffer_center_snp_end",buffer_center_snp_end);
     createBuffer<int>(CL_MEM_READ_ONLY,ref_haplotypes,"buffer_extended_root_mapping",buffer_extended_root_mapping);
     createBuffer<float>(CL_MEM_READ_ONLY,ref_haplotypes,"buffer_extended_frequency",buffer_extended_frequency);
-    createBuffer<float>(CL_MEM_READ_ONLY,ref_haplotypes,"buffer_frequency",buffer_frequency);
     createBuffer<int>(CL_MEM_READ_WRITE,g_people*g_flanking_snps,"buffer_subject_genotype_block",buffer_subject_genotype_block);
     createBuffer<float>(CL_MEM_READ_WRITE,g_people*g_flanking_snps,"buffer_subject_dosage_block",buffer_subject_dosage_block);
     createBuffer<float>(CL_MEM_READ_WRITE,g_people*g_flanking_snps*4,"buffer_subject_posterior_prob_block",buffer_subject_posterior_prob_block);
@@ -71,6 +70,8 @@ void GuidedMendelGPU::init_opencl(){
       setArg(kernel_impute_genotype_guide,arg, penetrance_matrix_size,"kernel_impute_genotype_guide");
       setArg(kernel_impute_genotype_guide,arg, packedextendedhap_len,"kernel_impute_genotype_guide");
       setArg(kernel_impute_genotype_guide,arg, g_flanking_snps,"kernel_impute_genotype_guide");
+      int max_geno = g_genotype_imputation?3:4;
+      setArg(kernel_impute_genotype_guide,arg, max_geno,"kernel_impute_genotype_guide");
       setArg(kernel_impute_genotype_guide,arg, *buffer_genotype_imputation,"kernel_impute_genotype_guide");
       setArg(kernel_impute_genotype_guide,arg, *buffer_haplotypes,"kernel_impute_genotype_guide");
       setArg(kernel_impute_genotype_guide,arg, *buffer_extended_haplotypes,"kernel_impute_genotype_guide");
@@ -117,6 +118,5 @@ void GuidedMendelGPU::init_window_opencl(){
   if (run_gpu){
     #ifdef USE_GPU
     #endif
-    cerr<<"Buffers sent to GPU for current window\n";
   }
 }

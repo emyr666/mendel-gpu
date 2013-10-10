@@ -24,8 +24,8 @@ void MendelGPU::run_sliding_window(){
     do{
       if (gi_iteration==0) compute_penetrance(); 
       compute_haplotype_weights();
-      converged = check_mm_converged();
-      init_iteration_buffers();
+      converged = check_mm_converged();// computes haplotype frequencies
+      init_iteration_buffers();  
       cerr<<"MM iteration "<<gi_iteration<<" and convergence "<<converged<<endl;
       ++gi_iteration;
     }while(gi_iteration<max_iter && !converged);
@@ -76,6 +76,7 @@ void MendelGPU::allocate_memory(){
   // allocation begins here
   g_haplotype = new int[g_max_haplotypes*g_max_window];  
   g_frequency = new float[g_max_haplotypes];
+  for(int i=0;i<g_max_haplotypes;++i) g_frequency[i] = 0;
   g_old_frequency = new float[g_max_haplotypes];
   g_active_haplotype = new int[g_max_haplotypes];
   haploid_arr = new int[g_people];

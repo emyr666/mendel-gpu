@@ -6,10 +6,9 @@
 #endif
 
 void DenovoGlfMendelGPU::precompute_penetrance_fast_opencl(){
-  bool debug_penmat = g_markers==-6;
-  //bool debug_penmat = g_left_marker==-2;
-  int debug_penmat_person = 3;
-  cerr<<endl;
+  //bool debug_penmat = g_markers==-6;
+  bool debug_penmat = g_left_marker==-91;
+  int debug_penmat_person = 0;
   if (run_gpu){
 #ifdef USE_GPU
     writeToBuffer(buffer_right_edge_dosage,g_max_haplotypes,right_edge_dosage,"buffer_right_edge_dosage");

@@ -76,7 +76,7 @@ void clSafe (cl_int rc, string functionname) {
 
 void MendelGPU::createKernel(const char * name, cl::Kernel * & kernel){
   ostringstream oss;
-  oss<<"Creating kernel "<<name;
+  oss<<"Creating a kernel "<<name;
   string mesg = oss.str();
   cerr<<mesg<<endl;
   kernel = new cl::Kernel(*program,name,&err);

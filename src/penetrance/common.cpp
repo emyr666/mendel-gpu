@@ -4,6 +4,7 @@
 
 
 bool MendelGPU::check_mm_converged(){
+  bool debug_freq = false;
   cerr<<"Doing MM updates\n";
   float d = 0;
   float e = 0;
@@ -23,7 +24,7 @@ bool MendelGPU::check_mm_converged(){
     for(int j=0;j<g_max_haplotypes;++j){
       if (g_active_haplotype[j]){
         g_frequency[j] = g_frequency[j]>g_delta?g_weight[j]/(t-g_lambda*q):g_weight[j]/(t-g_lambda*q+g_lambda);
-        //cerr<<"1 Assigning new freq "<<j<<" of "<<g_frequency[j]<<endl;
+        if (debug_freq) cerr<<"1 Assigning new freq "<<j<<" of "<<g_frequency[j]<<endl;
         if(g_frequency[j]<gf_epsilon) g_frequency[j] = gf_epsilon;
         
       }
@@ -31,12 +32,12 @@ bool MendelGPU::check_mm_converged(){
   }else if(t>0){
     for(int j=0;j<g_max_haplotypes;++j){
       g_frequency[j] = g_weight[j]/t;
-        //cerr<<"2 Assigning new freq "<<j<<" of "<<g_frequency[j]<<endl;
+        if (debug_freq)cerr<<"2 Assigning new freq "<<j<<" of "<<g_frequency[j]<<endl;
     }
   }else{
     for(int j=0;j<g_max_haplotypes;++j){
       g_frequency[j] = 1./g_max_haplotypes;
-        //cerr<<"3 Assigning new freq "<<j<<" of "<<g_frequency[j]<<endl;
+        if (debug_freq)cerr<<"3 Assigning new freq "<<j<<" of "<<g_frequency[j]<<endl;
     }
   }
   t = 0;
@@ -64,12 +65,12 @@ void MendelGPU::compute_haplotype_weights(){
   cerr<<"begin compute_weights at iteration: "<<gi_iteration<<"\n";
   //cerr<<"Geno dim is "<<geno_dim<<endl;
   //return;
-  bool debug_personhap = false;
+  bool debug_personhap = g_left_marker<0;
   //bool debug_personhap = gi_iteration==2;
   //bool debug_personhap = g_haplotypes<-4;
-  int debug_person = 10;
-  bool debug_weights = g_haplotypes<-4;
-  bool debug_freq = g_haplotypes<-4;
+  int debug_person = 0;
+  bool debug_weights = false;
+  bool debug_freq = false;
   if(run_cpu){
     memset(g_weight,0,sizeof(float)*g_max_haplotypes);
     if (gi_iteration==0){
@@ -82,11 +83,11 @@ void MendelGPU::compute_haplotype_weights(){
       for(int j=0;j<g_max_haplotypes;++j){
         int start = b_impute?j:0;
         if (g_active_haplotype[j]){
+          if (debug_freq) cout<<"Freq "<<j<<":"<<g_frequency[j];
           for(int k=start;k<g_max_haplotypes;++k){
             if (g_active_haplotype[k]){
               frequency_cache[j*g_max_haplotypes+k] = g_frequency[j]*g_frequency[k];
               if (j!=k) frequency_cache[j*g_max_haplotypes+k]*=2;
-              if (debug_freq) cout<<" "<<frequency_cache[j*g_max_haplotypes+k];
             }
           }
         }
@@ -125,8 +126,6 @@ void MendelGPU::compute_haplotype_weights(){
                   likelihood+=p;
                   g_current_weight[j]+=p;
                   g_current_weight[k]+=p;
-                //cerr<<"freq is "<<freq<<" and pen is "<<penetrance<<endl;
-                //cerr<<"weight for haps "<<j<<","<<k<<" is now "<<g_current_weight[j]<<endl;
                 }
               }
             } 
@@ -172,5 +171,4 @@ void MendelGPU::compute_haplotype_weights(){
   }//END CPU VERSION
   //cerr<<"done do_iteration\n";
   if (debug_personhap||debug_weights) exit(1);
-  if (debug_freq) exit(1);
 }

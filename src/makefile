@@ -47,4 +47,4 @@ cl_templates.o: cl_templates.cpp cl_templates.hpp
 
 clean:
 	for dir in $(DIRS); do(cd $$dir; rm -f *.o  || exit 1) || exit 1; done
-	rm -f $(PROGRAM) $(OBJS) *.mod
+	rm -f $(PROGRAM) $(OBJS) *.mod *.o

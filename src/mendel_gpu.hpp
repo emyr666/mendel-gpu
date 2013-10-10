@@ -69,7 +69,6 @@ protected:
   float g_lambda;
   int geno_dim;
   int penetrance_matrix_size;
-  //int g_max_region_size;
   // variables
   int g_markers;
   int g_haplotypes;
@@ -84,19 +83,7 @@ protected:
   float * penetrance_cache;
   float * logpenetrance_cache;
   int * haploid_arr;
-  //float * g_region_snp_penetrance;
-  //int g_region_snp_offset;
   int g_genotype_imputation;
-  ofstream ofs_genotype_file;
-  ofstream ofs_dosage_file;
-  ofstream ofs_quality_file;
-  ofstream ofs_debug_haplotype_file;
-  ofstream ofs_posterior_file;
-  string outfile_format;
-  string outfile_geno;
-  string outfile_dosages;
-  string outfile_quality;
-  string outfile_posterior;
   float * subject_haplotype_weight;
   float * frequency_cache;
   float * g_current_weight;
@@ -174,22 +161,6 @@ private:
   // return true if converged
   bool check_mm_converged();
     
-  // this functions are first called by the fortran wrapper
-  //void init_gpu_(int * platform_id, int * device_id);
-  // just a simple test to see that the GPU is working
-  //void run_simple_(int * scaler, int * return_vec);
-  // this function loads settings from the configuration file
-  // and stores the values in global variables that are visible
-  // to the fortran wrapper. It also loads the datasets in to memory.
-  //void load_constants_(int * model, int * people,int * snps, int * total_regions,int * haplotype_mode, int * flanking_snps,int * max_haplotypes,int * max_extended_haplotypes,int * platform_id, int * device_id, float * delta, float * lambda, int * i_geno_dim);
-
-  // allocates data structures for the host and the GPU
-  //void init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps,  int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, int * window2,int * prev_right_marker,float * frequency, float * weight, int * haplotype,int * flanking_snps);
-  // allocates region specific data structures for the host and the GPU
-  //void init_region_buffers_(int * regionstart,int * regionend);
-  // allocates window specific data structures for the host and the GPU
-  //void init_window_buffers_();
-  // allocates iteration specific data structures for the host and the GPU
   void init_iteration_buffers();
   void init_iteration_buffers_opencl();
   // functions for computing haplotype frequencies

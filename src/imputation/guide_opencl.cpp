@@ -18,7 +18,6 @@ void GuidedMendelGPU::prep_impute_genotypes_guide_opencl(){
 }
 
 void GuidedMendelGPU::impute_genotypes_guide_opencl(){
-  int max_geno=g_genotype_imputation?3:4;
   int c_snp_offset = g_center_snp_start;
   int c_snp_start = g_center_snp_start - g_left_marker;
   int c_snp_end = c_snp_start+g_flanking_snps;
@@ -28,6 +27,7 @@ void GuidedMendelGPU::impute_genotypes_guide_opencl(){
   bool debug_pen = false;
   cerr<<"Imputing from "<<c_snp_start<<" to "<<(c_snp_end-1)<<" with offset "<<c_snp_offset<<endl;
 
+  int max_geno = g_genotype_imputation?3:4;
   if (run_gpu){
 #ifdef USE_GPU
     double start = clock();
@@ -39,104 +39,34 @@ void GuidedMendelGPU::impute_genotypes_guide_opencl(){
     // READ GENOTYPE POSTERIORS
     float subject_posterior_prob_block[g_people * g_flanking_snps * 4];
     readFromBuffer(buffer_subject_posterior_prob_block, g_people*g_flanking_snps*4,subject_posterior_prob_block,"buffer_subject_posterior_prob_block");
-    int len = c_snp_end-c_snp_start;
-    for(int j=0;j<len;++j){ // loop over SNPs j
-      if(debug_posterior){
-        for(int i=0;i<g_people;++i){
-          cout<<"GPU_POSTERIOR:\t"<<j;
-          cout<<"\t"<<i;
-          for(int k=0;k<max_geno;++k){
-            cout<<"\t"<<
-            subject_posterior_prob_block[i*g_flanking_snps*4+j*4+k];
-          }
-          cout<<endl;
-        }
-      }
-      if (outfile_format.compare(FORMAT_MEC)==0){
-        ofs_posterior_file<<j;
-        for(int i=0;i<g_people;++i){
-          for(int k=0;k<max_geno;++k){
-            ofs_posterior_file<<"\t"<<
-            subject_posterior_prob_block[i*g_flanking_snps*4+j*4+k];
-          }
-        }
-        ofs_posterior_file<<endl;
-      }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-        for(int i=0;i<g_people;++i){
-          ofs_posterior_file<<"GPU_POSTERIOR\t"<<i<<"\t"<<j;
-          for(int k=0;k<max_geno;++k){
-            ofs_posterior_file<<"\t"<<subject_posterior_prob_block[i*g_flanking_snps*4+j*4+k];
-          }
-          ofs_posterior_file<<endl;
-        }
-      }
-    }
     int subject_geno_block[g_people*g_flanking_snps];
     readFromBuffer(buffer_subject_genotype_block, g_people*g_flanking_snps,subject_geno_block,"buffer_subject_genotype_block");
-    cerr<<"Personloop: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
-      len = c_snp_end-c_snp_start;
-      for(int j=0;j<len;++j){
-        int current_snp = c_snp_offset+c_snp_start+j;
-        if (outfile_format.compare(FORMAT_MEC)==0){
-          ofs_genotype_file<<current_snp<<"\t";
+    float subject_dosage_block[g_people*g_flanking_snps];
+    readFromBuffer(buffer_subject_dosage_block, g_people*g_flanking_snps,subject_dosage_block,"buffer_subject_dosage_block");
+    for(int j=g_center_snp_start;j<=g_center_snp_end;++j){
+      int col = j-g_center_snp_start;
+      float posteriors[g_people*max_geno];
+      int genotypes[g_people];
+      float dosages[g_people];
+      for(int i=0;i<g_people;++i){
+        if (debug_posterior) cout<<"GPU_POSTERIOR:\t"<<j<<"\t"<<i;
+        for(int k=0;k<max_geno;++k){
+          posteriors[i*max_geno+k] = 
+          subject_posterior_prob_block[i*g_flanking_snps*4+col*4+k];
+          if (debug_posterior) cout<<"\t"<<posteriors[i*max_geno+k];
         }
-        for(int i=0;i<g_people;++i){
-          if(debug_geno) cout<<"GPUGENO: "<<(c_snp_offset+c_snp_start+j)<<" "<<i<<" "<<subject_geno_block[i*g_flanking_snps+j]<<endl;
-          if (outfile_format.compare(FORMAT_MEC)==0){
-            ofs_genotype_file<<subject_geno_block[i*g_flanking_snps+j];
-          }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-            ofs_genotype_file<<"GPU_GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_geno_block[i*g_flanking_snps+j]<<endl;
-          }else{
-       //     ofs_genotype_file<<" "<<outfile_format;
-          }
-        }
-        if (outfile_format.compare(FORMAT_MEC)==0){
-          ofs_genotype_file<<endl;
-        }
+        if (debug_posterior) cout<<endl;
+        genotypes[i] = subject_geno_block[i*g_flanking_snps+col];
+        dosages[i] = subject_dosage_block[i*g_flanking_snps+col];
       }
-//    for(int i=0;i<g_people;++i){
-//      ofs_genotype_file<<"GPU_GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_genotypes[i]<<endl;
-//    }
-    if (g_genotype_imputation){
-      float subject_dosage_block[g_people*g_flanking_snps];
-      readFromBuffer(buffer_subject_dosage_block, g_people*g_flanking_snps,subject_dosage_block,"buffer_subject_dosage_block");
-      int len = c_snp_end-c_snp_start;
-      for(int j=0;j<len;++j){
-        int current_snp = c_snp_offset+c_snp_start+j;
-        if (outfile_format.compare(FORMAT_MEC)==0){
-          ofs_dosage_file<<current_snp<<"\t";
-        }
-        for(int i=0;i<g_people;++i){
-          if (debug_dosage) cout<<"GPUDOSE: "<<current_snp<<" "<<i<<" "<<subject_dosage_block[i*g_flanking_snps+j]<<endl;
-          if (outfile_format.compare(FORMAT_MEC)==0){
-            char chardose = 
-            (int)(subject_dosage_block[i*g_flanking_snps+j]*10)+'A';
-            ofs_dosage_file<<chardose;
-            //ofs_dosage_file<<subject_dosage_block[i*g_flanking_snps+j]<<endl;
-          }else if (outfile_format.compare(FORMAT_DEFAULT)==0){
-            ofs_dosage_file<<"GPU_DOSE:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_dosage_block[i*g_flanking_snps+j]<<endl;
-          }
-        }
-        if (outfile_format.compare(FORMAT_MEC)==0){
-          ofs_dosage_file<<endl;
-        }
-        float rsq = compute_rsq(subject_dosage_block, g_flanking_snps,j);
-        ofs_quality_file<<current_snp<<"\t"<<rsq<<endl;
+      io_manager->writePosterior(max_geno,j,posteriors,g_people);
+      io_manager->writeGenotype(j,genotypes,g_people);
+      if (g_genotype_imputation){
+        io_manager->writeDosage(j,dosages,g_people);
+        float rsq = compute_rsq(dosages,1,0);
+        io_manager->writeQuality(j,rsq);
       }
     }
-//      for(int i=0;i<g_people;++i){
-//        //float dose = 0;
-//        //for(int j=0;j<max_geno;++j){
-//        //  dose+=j*subject_posterior[i*4+j]/denom;
-//        //}
-//        ofs_dosage_file<<"GPU_DOSE:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_dosages[i]<<endl;
-//        if (debug_dosage) cout<<"GPU DOSE:\t"<<i<<"\t"<<current_snp<<"\t"<<subject_dosages[i]<<endl;
-//      }
-//      float rsq = compute_rsq(subject_dosages);
-//      ofs_quality_file<<current_snp<<"\t"<<rsq<<endl;
-//    }
-//    cerr<<"Elapsed time: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
-//    #endif
 #endif
   }
 }

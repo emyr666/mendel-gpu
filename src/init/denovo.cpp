@@ -50,16 +50,16 @@ void DenovoMendelGPU::init_window(){
   //g_haplotype = haplotype;
   bool debug_haplotype = false;
   if (debug_haplotype){
-    if (debug_mode) ofs_debug_haplotype_file<<"ASSUMED DOUBLED HAPLOTYPES:\n";
+    if (debug_mode) cerr<<"ASSUMED DOUBLED HAPLOTYPES:\n";
     for(int i=0;i<g_max_haplotypes;++i){
       if (g_active_haplotype[i]){
-        if (debug_mode) ofs_debug_haplotype_file<<i<<":";
+        if (debug_mode) cerr<<i<<":";
         string curhap(g_markers,zero);
         for(int j=0;j<g_markers;++j){
           curhap[j] = (char)(g_haplotype[i*g_max_window+j]+offset); 
-          if (debug_mode) ofs_debug_haplotype_file<<curhap[j];
+          if (debug_mode) cerr<<curhap[j];
         }
-        if (debug_mode) ofs_debug_haplotype_file<<endl;
+        if (debug_mode) cerr<<endl;
       }
     }
   }
@@ -110,8 +110,10 @@ void DenovoMendelGPU::double_haplotypes(){
     for(int i=0;i<last_marker;++i){
       g_haplotype[free_index*g_max_window+i] = 
       g_haplotype[occupied_index*g_max_window+i];
-      g_frequency[free_index] = g_frequency[occupied_index];
+     
     }
+    g_frequency[occupied_index]/=2;
+    g_frequency[free_index] = g_frequency[occupied_index];
     g_haplotype[occupied_index*g_max_window+last_marker] = 0;
     g_haplotype[free_index*g_max_window+last_marker] = 1;
     int len = g_markers>1?g_markers-1:g_markers;
@@ -207,6 +209,18 @@ void DenovoMendelGPU::prune_haplotypes_(){
     //cerr<<"free index "<<free_index<<" now points to "<<occupied_index<<endl;
     it_occupied++;
     it_free++;
+  }
+  // normalize the frequencies
+  float norm = 0;
+  for(int j=0;j<g_max_haplotypes;++j){
+    if(g_active_haplotype[j]){
+      norm+=g_frequency[j];
+    }
+  }
+  for(int j=0;j<g_max_haplotypes;++j){
+    if(g_active_haplotype[j]){
+      g_frequency[j]/=norm;
+    }
   }
   cerr<<"Leaving prune haplotypes\n";
 }

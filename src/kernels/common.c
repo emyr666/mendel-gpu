@@ -46,6 +46,7 @@ __local float * local_likelihood
   int haploid = haploid_arr[subject];
 #endif
   int threadindex = get_local_id(0);
+
   // INITIALIZE HAPLOTYPE SPECIFIC VARIABLES
   for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
     int hapindex = chunk*BLOCK_WIDTH+threadindex;
@@ -57,9 +58,10 @@ __local float * local_likelihood
   for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
     int hapindex = chunk*BLOCK_WIDTH+threadindex;
     if (hapindex<max_haplotypes && local_active_haplotype[hapindex]){
+      //local_frequency[hapindex] = .1;
       local_frequency[hapindex] = frequency[hapindex];
       local_marginals[hapindex] = 0;
-      local_cached_marginals[hapindex] = iteration[0]==1?0:
+      local_cached_marginals[hapindex] = iteration[0]==0?0:
       subject_haplotype_weight[subject*max_haplotypes+hapindex];
     }
   }
@@ -69,15 +71,15 @@ __local float * local_likelihood
 #ifdef unphased
   for(int righthapindex=0;righthapindex<max_haplotypes;++righthapindex){
     if (local_active_haplotype[righthapindex] && 
-    (iteration[0]==1 || local_cached_marginals[righthapindex]>0)){
+    (iteration[0]==0 || local_cached_marginals[righthapindex]>0)){
 #endif
       local_penetrance_block[threadindex] = 0;
       for(int chunk=0;chunk<(max_haplotypes/BLOCK_WIDTH)+1;++chunk){
 #ifdef unphased
         int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
         if (lefthapindex<=righthapindex&&local_active_haplotype[lefthapindex]
-        &&(iteration[0]==1||local_cached_marginals[lefthapindex]>0)){
-          float penetrance = (!haploid || lefthapindex==righthapindex) ?
+        &&(iteration[0]==0||local_cached_marginals[lefthapindex]>0)){
+          float penetrance = (haploid || lefthapindex==righthapindex) ?
           penetrance_cache[subject*penetrance_matrix_size+
           righthapindex*max_haplotypes+lefthapindex]: 0;
           if (penetrance>0){
@@ -94,7 +96,7 @@ __local float * local_likelihood
 #ifdef phased
     int lefthapindex = chunk*BLOCK_WIDTH+threadindex;
     if (lefthapindex<max_haplotypes&&local_active_haplotype[lefthapindex]
-    &&(iteration[0]==1||local_cached_marginals[lefthapindex]>0)){
+    &&(iteration[0]==0||local_cached_marginals[lefthapindex]>0)){
       for(int gamete=0;gamete<2;++gamete){
         float penetrance = penetrance_cache[subject*max_haplotypes*2+
         lefthapindex*2+gamete];
@@ -130,8 +132,9 @@ __local float * local_likelihood
     int hapindex = chunk*BLOCK_WIDTH+threadindex;
     if (hapindex<max_haplotypes){
       subject_haplotype_weight[subject*max_haplotypes+hapindex] = 
-      local_likelihood[0]>0?local_marginals[hapindex] / local_likelihood[0]
-      : 0;
+      //frequency[hapindex];
+      //local_likelihood[0];
+      local_likelihood[0]>0?local_marginals[hapindex] / local_likelihood[0] : 0;
       //local_marginals[hapindex] ;
     }
   }

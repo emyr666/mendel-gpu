@@ -9,7 +9,7 @@
 void GuidedMendelGPU::precompute_penetrance_opencl(){
   bool debug_penmat = g_left_marker<0;
   cerr<<"Entering precompute_penetrance at left marker "<<g_left_marker<<"\n";
-  int debug_subject = 1;
+  int debug_subject = 90;
   if (run_gpu){
 #ifdef USE_GPU
     writeToBuffer(buffer_haplotypes, 1,&g_haplotypes,"buffer_haplotypes");
@@ -32,7 +32,8 @@ void GuidedMendelGPU::precompute_penetrance_opencl(){
         }
       }else{
         float * debug_cache = new float[g_people*penetrance_matrix_size];
-        readFromBuffer(buffer_logpenetrance_cache, g_people*penetrance_matrix_size,debug_cache,"buffer_logpenetrance_cache");
+        readFromBuffer(buffer_penetrance_cache, g_people*penetrance_matrix_size,debug_cache,"buffer_penetrance_cache");
+        //readFromBuffer(buffer_logpenetrance_cache, g_people*penetrance_matrix_size,debug_cache,"buffer_logpenetrance_cache");
         cout<<"GPU:\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){

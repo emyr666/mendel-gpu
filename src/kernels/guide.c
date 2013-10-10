@@ -170,6 +170,7 @@ __const float epsilon,
 __const int penetrance_matrix_size,
 __const int packedextendedhap_len,
 __const int flanking_snps,
+__const int max_geno,
 __constant int * genotype_imputation,
 __constant int * haplotypes,
 __constant int * extended_haplotypes,
@@ -213,7 +214,7 @@ __local float * local_denom
   local_posterior_prob1[threadindex]=0;
   local_posterior_prob2[threadindex]=0;
   local_posterior_prob3[threadindex]=0;
-  if (threadindex==0) local_denom[threadindex] = epsilon;
+  if (threadindex==0) local_denom[threadindex] = 0;
   // COPY HAPLOTYPE GROUP VERBATIM
   for(int haploindex = 0;haploindex<extended_haplotypes[0];++haploindex){
     if(threadindex<packedextendedhap_len){
@@ -231,34 +232,30 @@ __local float * local_denom
   barrier(CLK_LOCAL_MEM_FENCE);
 #ifdef unphased
   for(int righthapindex=0;righthapindex<extended_haplotypes[0];++righthapindex){
-    if (local_cached_marginals[local_root_mapping[righthapindex]]>0){
-      for(int chunk=0;chunk<(extended_haplotypes[0]/BLOCK_WIDTH_IMPUTE_GUIDE)+1;++chunk){
-        int lefthapindex = chunk*BLOCK_WIDTH_IMPUTE_GUIDE+threadindex;
-        //if (lefthapindex<=righthapindex ){
-        if ((!haploid || local_root_mapping[lefthapindex]==
-        local_root_mapping[righthapindex]) && lefthapindex<=righthapindex && 
-        local_cached_marginals[local_root_mapping[lefthapindex]]>0){
-          // penetrance only needs to be fetched once as it doesn't change 
-          // across sites
-          //float penetrance = .5;
-          float penetrance = penetrance_cache[subject*penetrance_matrix_size+
-          local_root_mapping[righthapindex]*max_haplotypes+local_root_mapping[lefthapindex]];
-          if (penetrance>0){
-            // scale by the haplotype frequencies
-            float prob = (lefthapindex!=righthapindex)?
-            local_frequency[lefthapindex]*
-            local_frequency[righthapindex]*penetrance*2:
-            local_frequency[lefthapindex]*
-            local_frequency[righthapindex]*penetrance;
-            // get the dosage at packedsite
-            int m = genotype_imputation[0]?(((int)local_packedextendedhap[righthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)local_packedextendedhap[lefthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) 
-            :2*(((int)local_packedextendedhap[righthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)local_packedextendedhap[lefthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1); 
-            // store the prob in the appropriate array
-            local_posterior_prob0[threadindex]+=(m==0)*prob;
-            local_posterior_prob1[threadindex]+=(m==1)*prob;
-            local_posterior_prob2[threadindex]+=(m==2)*prob;
-            local_posterior_prob3[threadindex]+=(m==3)*prob;
-          }
+    for(int chunk=0;chunk<(extended_haplotypes[0]/BLOCK_WIDTH_IMPUTE_GUIDE)+1;++chunk){
+      int lefthapindex = chunk*BLOCK_WIDTH_IMPUTE_GUIDE+threadindex;
+      if ((!haploid || local_root_mapping[lefthapindex]==
+      local_root_mapping[righthapindex]) && lefthapindex<=righthapindex){ 
+        // penetrance only needs to be fetched once as it doesn't change 
+        // across sites
+        //float penetrance = .5;
+        float penetrance = penetrance_cache[subject*penetrance_matrix_size+
+        local_root_mapping[righthapindex]*max_haplotypes+local_root_mapping[lefthapindex]];
+        if (penetrance>0){
+          // scale by the haplotype frequencies
+          float prob = (lefthapindex!=righthapindex)?
+          local_frequency[lefthapindex]*
+          local_frequency[righthapindex]*penetrance*2:
+          local_frequency[lefthapindex]*
+          local_frequency[righthapindex]*penetrance;
+          // get the dosage at packedsite
+          int m = genotype_imputation[0]?(((int)local_packedextendedhap[righthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)local_packedextendedhap[lefthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) 
+          :2*(((int)local_packedextendedhap[righthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1) + (((int)local_packedextendedhap[lefthapindex*packedextendedhap_len+(packedsite/32)].octet[(packedsite%32)/8]) >> ((packedsite%32)%8) & 1); 
+          // store the prob in the appropriate array
+          local_posterior_prob0[threadindex]+=(m==0)*prob;
+          local_posterior_prob1[threadindex]+=(m==1)*prob;
+          local_posterior_prob2[threadindex]+=(m==2)*prob;
+          local_posterior_prob3[threadindex]+=(m==3)*prob;
         }
       } 
       barrier(CLK_LOCAL_MEM_FENCE);
@@ -297,6 +294,7 @@ __local float * local_denom
 #endif
   //return;
   // reduce
+  if (threadindex<4) local_posterior_prob[threadindex] = epsilon;
   for(int s=BLOCK_WIDTH_IMPUTE_GUIDE/2; s>0; s>>=1) {
     if (threadindex<s) {
        local_posterior_prob0[threadindex]+=
@@ -312,16 +310,16 @@ __local float * local_denom
   }
   if (threadindex==0){
     // MOVE THESE INTO AN ARRAY OF 3 FOR CONVENIENT ACCESS
-    local_posterior_prob[0] = local_posterior_prob0[threadindex];
-    local_posterior_prob[1] = local_posterior_prob1[threadindex];
-    local_posterior_prob[2] = local_posterior_prob2[threadindex];
-    local_posterior_prob[3] = local_posterior_prob3[threadindex];
+    local_posterior_prob[0] += local_posterior_prob0[threadindex];
+    local_posterior_prob[1] += local_posterior_prob1[threadindex];
+    local_posterior_prob[2] += local_posterior_prob2[threadindex];
+    local_posterior_prob[3] += local_posterior_prob3[threadindex];
   }
 #ifdef unphased
   if (threadindex==0){
     float max_prob = 0;
     int geno2 = 0;
-    for(int h=0;h<4;++h){
+    for(int h=0;h<max_geno;++h){
       if(local_posterior_prob[h]>max_prob){
         max_prob = local_posterior_prob[h];
         geno2 = h;
@@ -335,7 +333,8 @@ __local float * local_denom
   }
 #endif
   if (threadindex<4){
-    subject_posterior_prob_block[subject*flanking_snps*4+packedsite*4+threadindex] = local_posterior_prob[threadindex]/local_denom[0];
+    subject_posterior_prob_block[subject*flanking_snps*4+packedsite*4+threadindex] = 
+    local_posterior_prob[threadindex]/local_denom[0];
   }
   return;
 }

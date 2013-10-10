@@ -69,6 +69,19 @@ void GuidedMendelGPU::init_window(){
   if (run_gpu){
     init_window_opencl();
   }
+  //  runKernel("kernel_compute_weights",kernel_compute_weights,g_people*BLOCK_WIDTH,1,1,BLOCK_WIDTH,1,1);
+//      float subject_haplotype_weight[g_people*g_max_haplotypes];
+//      readFromBuffer(buffer_subject_haplotype_weight, g_people*g_max_haplotypes,subject_haplotype_weight,"buffer_subject_haplotype_weight");
+//      float haplotype_weight[g_max_haplotypes];
+//      memset(haplotype_weight,0,sizeof(float)*g_max_haplotypes);
+//      for(int i = 0;i<g_people;++i){
+//        for(int j=0;j<g_max_haplotypes;++j){
+//          if (g_active_haplotype[j]){
+//            cout<<"GPU person "<<i<<" hap "<<j<<" weight "<<subject_haplotype_weight[i*g_max_haplotypes+j]<<endl;
+//            haplotype_weight[j]+=subject_haplotype_weight[i*g_max_haplotypes+j];
+//          }
+//        }
+//      }
 }
 
 
