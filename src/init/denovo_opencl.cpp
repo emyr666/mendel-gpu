@@ -60,6 +60,22 @@ void DenovoMendelGPU::init_opencl(){
   #endif
   }
 }
+void DenovoMendelGPU::free_opencl(){
+  if(run_gpu){
+#ifdef USE_GPU
+    delete buffer_right_edge_dosage; 
+    delete buffer_beyond_left_edge_dosage; 
+    delete buffer_prev_left_marker; 
+    delete buffer_twin_hap_index; 
+    delete buffer_center_dosage; 
+    delete buffer_subject_posterior_prob; 
+    delete buffer_subject_dosage; 
+    delete buffer_subject_genotype; 
+    delete kernel_impute_genotype_denovo; 
+    MendelGPU::free_opencl();
+#endif
+  }
+}
 
 void DenovoMendelGPU::init_window_opencl(){
   MendelGPU::init_window_opencl();

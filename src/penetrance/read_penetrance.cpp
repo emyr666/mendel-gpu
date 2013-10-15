@@ -17,12 +17,12 @@ int ReadParser::hex2int(string input){
 
 inline float get_bounded(float val){
   float logmatch = log(val);
-  if (val<ReadParser::min_log_phred) {
-    val = ReadParser::min_log_phred;
+  if (logmatch<ReadParser::min_log_phred) {
+    logmatch = ReadParser::min_log_phred;
   } else if (val>ReadParser::max_log_phred){
-    val = ReadParser::max_log_phred;
+    logmatch = ReadParser::max_log_phred;
   }
-  return val;
+  return logmatch;
 }
 
 void ReadParser::init_phred_lookup(int max_matrix_width){
@@ -30,9 +30,9 @@ void ReadParser::init_phred_lookup(int max_matrix_width){
   ReadParser::max_matrix_width = max_matrix_width;
   for(int phred=0;phred<100;++phred){
     float match_prob = 1.-(pow(10,(-phred/10.)));
-    logprob_match_lookup[phred] =get_bounded(log(match_prob));
+    logprob_match_lookup[phred] =get_bounded(match_prob);
     float mismatch_prob = 1.-match_prob;
-    logprob_mismatch_lookup[phred] =get_bounded(log(1.-match_prob));
+    logprob_mismatch_lookup[phred] =get_bounded(1.-match_prob);
     //cerr<<"phred "<<phred<<" has match value "<<match_prob<<","<<logprob_match_lookup[phred]
     //<<" and mismatch value "<<mismatch_prob<<","<<logprob_mismatch_lookup[phred]<<endl;
   }
@@ -115,12 +115,16 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
           //exit(0);
         //}
         int stroffset = 0;
+        if (parser->depth[parser->matrix_rows]>MAX_SUBREADS){
+          cerr<<"A read depth of "<<parser->depth[parser->matrix_rows]<<" was encountered for super read "<<parser->matrix_rows<<", exceeding the max allocation of "<<MAX_SUBREADS<<". Consider increasing the MAX_SUBREADS value.\n";
+          throw "Read parser error";
+        }
         for(int i=0;i<parser->depth[parser->matrix_rows];++i){
           for(int j=0;j<parser->read_len[parser->matrix_rows];++j){
             string element = mesg_y1.substr(stroffset,2);
-            assert(i<MAX_SUBREADS);
-            assert(j<MAX_READ_LEN);
-            parser->base_quality[parser->matrix_rows][i][j] = ReadParser::hex2int(element);
+            if (j<parser->max_matrix_width){
+              parser->base_quality[parser->matrix_rows][i][j] = ReadParser::hex2int(element);
+            }
             stroffset += 2;
           }
         }
@@ -235,7 +239,7 @@ void ReadParser::parse_positions(const char * filename){
     exit(1);
   }
   string line;
-  getline(ifs,line);
+  //getline(ifs,line);
   while(getline(ifs,line)){
     istringstream iss(line);
     string chr,rs;
@@ -278,7 +282,7 @@ void ReadParser::init(const char * bam_filename){
     map_quality[i] = new int[MAX_SUPERREADS];
     base_quality[i] = new int * [MAX_SUBREADS];
     for(int j=0;j<MAX_SUBREADS;++j){
-      base_quality[i][j] = new int[MAX_READ_LEN];
+      base_quality[i][j] = new int[max_matrix_width];
     }
   }
   matrix_alleles = new int[max_matrix_width*MAX_SUPERREADS];
@@ -330,9 +334,10 @@ void ReadParser::print_data(){
       cout<<map_quality[i][j];
     }
     cout<<"\t";
+    int maxcol = read_len[i]<max_matrix_width?read_len[i]:max_matrix_width;
     for(int j=0;j<depth[i];++j){
       if (j) cout<<";";
-      for(int k=0;k<read_len[i];++k){
+      for(int k=0;k<maxcol;++k){
         if (k) cout<<",";
         cout<<base_quality[i][j][k];
       }
@@ -340,7 +345,7 @@ void ReadParser::print_data(){
     cout<<"\t";
     for(int j=0;j<depth[i];++j){
       if (j) cout<<";";
-      for(int k=0;k<read_len[i];++k){
+      for(int k=0;k<maxcol;++k){
         if (k) cout<<",";
         cout<<phred2prob1(base_quality[i][j][k]);
       }

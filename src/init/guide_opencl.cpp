@@ -19,7 +19,6 @@ void GuidedMendelGPU::init_opencl(){
     createBuffer<int>(CL_MEM_READ_ONLY,g_max_window,"buffer_extended_snp_mapping",buffer_extended_snp_mapping);
     createBuffer<int>(CL_MEM_READ_ONLY,1,"buffer_extended_haplotypes",buffer_extended_haplotypes);
     createBuffer<int>(CL_MEM_READ_ONLY,1,"buffer_center_snp_end",buffer_center_snp_end);
-    createBuffer<int>(CL_MEM_READ_ONLY,1,"buffer_center_snp_end",buffer_center_snp_end);
     createBuffer<int>(CL_MEM_READ_ONLY,ref_haplotypes,"buffer_extended_root_mapping",buffer_extended_root_mapping);
     createBuffer<float>(CL_MEM_READ_ONLY,ref_haplotypes,"buffer_extended_frequency",buffer_extended_frequency);
     createBuffer<int>(CL_MEM_READ_WRITE,g_people*g_flanking_snps,"buffer_subject_genotype_block",buffer_subject_genotype_block);
@@ -111,6 +110,27 @@ void GuidedMendelGPU::init_opencl(){
 #endif
   }
   cerr<<"Buffers initialized\n";
+}
+
+void GuidedMendelGPU::free_opencl(){
+  if(run_gpu){
+#ifdef USE_GPU
+    delete buffer_packedextendedhap;
+    delete buffer_subject_posterior_prob_block;
+    delete buffer_subject_dosage_block;
+    delete buffer_subject_genotype_block;
+    delete buffer_extended_frequency;
+    delete buffer_extended_root_mapping;
+    delete buffer_center_snp_end;
+    delete buffer_extended_haplotypes;
+    delete buffer_extended_snp_mapping;
+    delete buffer_snp_penetrance;
+    delete buffer_packedhap;
+    delete kernel_impute_genotype_guide;
+    delete kernel_precompute_penetrance;
+    MendelGPU::free_opencl();
+#endif
+  }
 }
 
 void GuidedMendelGPU::init_window_opencl(){

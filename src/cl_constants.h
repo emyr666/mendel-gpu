@@ -6,6 +6,7 @@
 #define SMALL_BLOCK_WIDTH 32
 #define BLOCK_WIDTH 256
 #define BLOCK_WIDTH_IMPUTE_GUIDE 256
+#define LOG_HALF -.6931472
 
 typedef struct {
   float prob;

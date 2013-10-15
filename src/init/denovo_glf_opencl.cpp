@@ -65,3 +65,14 @@ void DenovoGlfMendelGPU::init_opencl(){
   #endif
   }
 }
+
+void DenovoGlfMendelGPU::free_opencl(){
+  if(run_gpu){
+#ifdef USE_GPU
+    delete buffer_snp_penetrance;
+    delete kernel_precompute_penetrance_fast;
+    delete kernel_impute_penetrance;
+    DenovoMendelGPU::init_opencl();
+#endif
+  }
+}

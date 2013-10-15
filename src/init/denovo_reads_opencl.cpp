@@ -7,30 +7,49 @@
 
 void DenovoReadsMendelGPU::init_opencl(){
   cerr<<"Initializing OpenCL for DenovoReadsMendelGPU\n";
-  DenovoMendelGPU::init_opencl();
   if(run_gpu){
 #ifdef USE_GPU
-//    clSafe(err,"creating kernel impute_genotype_denovo");
-//    kernel_impute_genotype_denovo_haploid = new cl::Kernel(*program,"impute_genotype_denovo_haploid",&err);
-//    clSafe(err,"creating kernel impute_genotype_denovo_haplod");
-//    buffer_beyond_left_edge_dosage = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int)*g_max_haplotypes, NULL, &err);
-//    clSafe(err,"creating buffer beyond left edge dosage");
-//    buffer_center_dosage = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int)*g_max_haplotypes, NULL, &err);
-//    clSafe(err,"creating buffer center dosage");
-//    buffer_right_edge_dosage = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int)*g_max_haplotypes, NULL, &err);
-//    clSafe(err,"creating buffer right edge dosage");
-//    buffer_twin_hap_index = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int)*g_max_haplotypes, NULL, &err);
-//    clSafe(err,"creating buffer twin index");
-//    buffer_subject_posterior_prob = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(float)*g_people*4, NULL, &err);
-//    clSafe(err,"creating buffer subject_posterior_prob");
-//    buffer_subject_genotype = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(int) * g_people, NULL, &err);
-//    clSafe(err,"creating buffer subject genotype");
-//    buffer_subject_dosage = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(float) * g_people, NULL, &err);
-//    clSafe(err,"creating buffer subject dosage");
-//    buffer_prev_left_marker = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int) * 1, NULL, &err);
-//    clSafe(err,"creating buffer prev left marker");
-//    buffer_center_snp = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int) * 1, NULL, &err);
-//    clSafe(err,"creating buffer center marker");
+    DenovoMendelGPU::init_opencl();
+    createKernel("reads_compute_penetrance",kernel_reads_compute_penetrance);
+    createKernel("reads_adjust_penetrance",kernel_reads_adjust_penetrance);
+    cerr<<"Read compact matrix size people are "<<read_compact_matrix_size<<","<<g_people<<endl;
+    createBuffer<int>(CL_MEM_READ_ONLY,g_people*read_compact_matrix_size,"buffer_read_alleles_mat",buffer_read_alleles_mat);
+    createBuffer<float>(CL_MEM_READ_ONLY,g_people*read_compact_matrix_size,"buffer_read_match_logmat",buffer_read_match_logmat);
+    createBuffer<float>(CL_MEM_READ_ONLY,g_people*read_compact_matrix_size,"buffer_read_mismatch_logmat",buffer_read_mismatch_logmat);
+    createBuffer<int>(CL_MEM_READ_ONLY,g_people,"buffer_mat_rows_by_subject",buffer_mat_rows_by_subject);
+    int arg;
+    arg = 0;
+    setArg(kernel_reads_compute_penetrance,arg,g_max_window,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,g_max_haplotypes,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,penetrance_matrix_size,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,read_compact_matrix_size,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_markers,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_mat_rows_by_subject,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_read_alleles_mat,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_read_match_logmat,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_read_mismatch_logmat,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_haplotype,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_logpenetrance_cache,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,*buffer_active_haplotype,"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_reads_compute_penetrance");
+    setArg(kernel_reads_compute_penetrance,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_reads_compute_penetrance");
+    arg = 0;
+    setArg(kernel_reads_adjust_penetrance,arg,g_max_haplotypes,"kernel_reads_adjust_penetrance");
+    setArg(kernel_reads_adjust_penetrance,arg,penetrance_matrix_size,"kernel_reads_adjust_penetrance");
+    setArg(kernel_reads_adjust_penetrance,arg,gf_logpen_threshold,"kernel_reads_adjust_penetrance");
+    setArg(kernel_reads_adjust_penetrance,arg,*buffer_logpenetrance_cache,"kernel_reads_adjust_penetrance");
+    setArg(kernel_reads_adjust_penetrance,arg,*buffer_penetrance_cache,"kernel_reads_adjust_penetrance");
+    setArg(kernel_reads_adjust_penetrance,arg,*buffer_active_haplotype,"kernel_reads_adjust_penetrance");
+    setArg(kernel_reads_adjust_penetrance,arg,cl::__local(sizeof(int)*g_max_haplotypes),"kernel_reads_adjust_penetrance");
+    setArg(kernel_reads_adjust_penetrance,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_reads_adjust_penetrance");
   #endif
+  }
+}
+
+void DenovoReadsMendelGPU::free_opencl(){
+  if(run_gpu){
+#ifdef USE_GPU
+    DenovoMendelGPU::init_opencl();
+#endif
   }
 }

@@ -23,6 +23,7 @@ public:
 protected:
   virtual void allocate_memory();
   virtual void init_opencl();
+  virtual void free_opencl();
   virtual void init_window_opencl();
   virtual void load_datasets()=0;
   virtual void init_window();
@@ -226,6 +227,7 @@ private:
   void load_datasets();
   void allocate_memory();
   void init_opencl();
+  void free_opencl();
   void init_window_opencl();
   void compute_penetrance();
   int get_max_window_size();
@@ -279,6 +281,7 @@ protected:
   virtual void compute_penetrance()=0;
   virtual void allocate_memory();
   virtual void init_opencl();
+  virtual void free_opencl();
   virtual void init_window();
 
   void finalize_window();
@@ -320,12 +323,20 @@ private:
   ReadParser *  parsers;
   void allocate_memory();
   void init_opencl();
+  void free_opencl();
   void populate_read_matrices();
   void process_read_matrices();
+  void process_read_matrices_opencl();
   void compute_penetrance();
   void init_window();
-
-private:
+  #ifdef USE_GPU
+  cl::Kernel * kernel_reads_compute_penetrance;
+  cl::Kernel * kernel_reads_adjust_penetrance;
+  cl::Buffer * buffer_read_alleles_mat;
+  cl::Buffer * buffer_read_match_logmat;
+  cl::Buffer * buffer_read_mismatch_logmat;
+  cl::Buffer * buffer_mat_rows_by_subject;
+  #endif
   // functions for penetrance calculations of reads
   void load_datasets();
   float get_bam_loglikelihood(int len,float *  hap1prob,float *  hap2prob);
@@ -334,7 +345,7 @@ private:
   int full_rows;
   int read_compact_matrix_size;
   int read_full_matrix_size;
-  int * superread_indices;
+  //int * superread_indices;
   int * read_alleles_mat; // has superreads rows
   float * read_match_logmat; // has superreads*subreads rows
   float * read_mismatch_logmat;// has superreads*subreads rows
@@ -359,6 +370,7 @@ private:
   //void impute_genotypes();
   void allocate_memory();
   void init_opencl();
+  void free_opencl();
   void compute_penetrance();
 
   void load_datasets();

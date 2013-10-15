@@ -37,14 +37,14 @@ public:
   static void init_phred_lookup(int max_width);
   // utility function
   static inline float phred2prob1(int phred){
-    return 1-(pow(10,(-phred/10)));
+    return 1.-(pow(10,(-phred/10.)));
   }
   vector<int> found_positions;
   static uint max_matrix_width;
   static uint max_matrix_height;
   static const uint MAX_SUPERREADS = 10;
   static const uint MAX_SUBREADS = 50;
-  static const uint MAX_READ_LEN = 10;
+  //static const uint MAX_READ_LEN = 10;
   static const float EPSILON=1e-2;
   static float min_log_phred,max_log_phred;
   static float logprob_match_lookup[];

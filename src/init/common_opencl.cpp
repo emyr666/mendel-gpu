@@ -112,12 +112,6 @@ void MendelGPU::init_opencl(){
     createBuffer<float>(CL_MEM_READ_WRITE,g_people * g_max_haplotypes,"buffer_subject_haplotype_weight",buffer_subject_haplotype_weight);
     createBuffer<int>(CL_MEM_READ_ONLY,g_max_haplotypes,"buffer_active_haplotype",buffer_active_haplotype);
     createBuffer<float>(CL_MEM_READ_WRITE,g_max_haplotypes,"buffer_haplotype_weight",buffer_haplotype_weight);
-    //buffer_region_snp_penetrance = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(float) * g_people * geno_dim * g_max_region_size , NULL, &err);
-    //clSafe(err,"creating snp penetrance buffer");
-    //buffer_region_snp_offset = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(int) * 1, NULL, &err);
-    //clSafe(err,"creating snp offset buffer");
-    //buffer_max_penetrance = new cl::Buffer(*context, CL_MEM_READ_WRITE, sizeof(float)*g_people, NULL, &err);
-    //clSafe(err,"creating buffer max penetrance");
     cerr<<"GPU Buffers created\n";
     // initialize anything here
     writeToBuffer(buffer_genotype_imputation,1,&g_genotype_imputation,"buffer_genotype_imputation");
@@ -176,6 +170,30 @@ void MendelGPU::init_opencl(){
     cerr<<"GPU kernel arguments assigned.\n";
 #endif
   }
+}
+
+void MendelGPU::free_opencl(){
+  delete buffer_haplotype_weight;
+  delete buffer_active_haplotype;
+  delete buffer_subject_haplotype_weight;
+  delete buffer_logpenetrance_cache;
+  delete buffer_penetrance_cache;
+  delete buffer_frequency;
+  delete buffer_haplotype;
+  delete buffer_haploid_arr;
+  delete buffer_left_marker;
+  delete buffer_haplotypes;
+  delete buffer_markers;
+  delete buffer_genotype_imputation;
+  delete buffer_iteration;
+  delete buffer_simple_out;
+  delete buffer_simple_in;
+  delete kernel_reduce_weights2;
+  delete kernel_compute_weights;
+  delete kernel_simple;
+  delete program;
+  delete commandQueue;
+  delete context;
 }
 
 void MendelGPU::init_window_opencl(){

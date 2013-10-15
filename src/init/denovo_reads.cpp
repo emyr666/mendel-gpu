@@ -17,6 +17,10 @@ DenovoReadsMendelGPU::~DenovoReadsMendelGPU(){
   cerr<<"Entering destructor denovo reads haplotyper\n";
   delete[] parsers;
   cerr<<"Parsers deleted\n";
+  delete[] read_alleles_mat;
+  delete[] read_match_logmat;
+  delete[] read_mismatch_logmat;
+  delete[] mat_rows_by_subject;
   cerr<<"Exiting destructor denovo reads haplotyper\n";
 
 }
@@ -42,10 +46,10 @@ void DenovoReadsMendelGPU::allocate_memory(){
   read_full_matrix_size = full_rows*g_max_window;
   read_compact_matrix_size = compact_rows*g_max_window;
   cerr<<"Read matrix sizes are "<<read_full_matrix_size<<" and "<<read_compact_matrix_size<<endl;
-  superread_indices = new int[g_people*full_rows];
+  //superread_indices = new int[g_people*full_rows];
   read_alleles_mat = new int[g_people*read_compact_matrix_size];
-  read_match_logmat = new float[g_people*read_full_matrix_size];
-  read_mismatch_logmat = new float[g_people*read_full_matrix_size];
+  read_match_logmat = new float[g_people*read_compact_matrix_size];
+  read_mismatch_logmat = new float[g_people*read_compact_matrix_size];
   mat_rows_by_subject = new int[g_people];
   cerr<<"Initialized variables for denovo reads haplotyper\n";
 }
