@@ -61,7 +61,7 @@ void MendelGPU::compute_haplotype_weights_opencl(){
         }
       }
     }
-    cerr<<"Elapsed time: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
+    cerr<<"Elapsed time for GPU compute haplotype weights: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
     #endif
   }
   //cerr<<"done do_iteration\n";

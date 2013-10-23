@@ -6,6 +6,7 @@
 #endif
 
 
+
 int main(int argc,char * argv[]){
   if (argc<2){
     cerr<<"Usage: mendel_gpu <config xml filename>\n";
@@ -22,7 +23,11 @@ int main(int argc,char * argv[]){
     }
     Config *  config = io->config;
     if (config->use_reference_panel){
-      haplotyper = new GuidedMendelGPU(io);
+      if (config->g_likelihood_mode==Config::LIKELIHOOD_MODE_READS){
+        haplotyper = new GuidedReadsMendelGPU(io);
+      }else if (config->g_likelihood_mode==Config::LIKELIHOOD_MODE_GENOTYPES){
+        haplotyper = new GuidedGlfMendelGPU(io);
+      }
     }else{
       if (config->g_likelihood_mode==Config::LIKELIHOOD_MODE_READS){
         cerr<<"Shot gun reads\n";

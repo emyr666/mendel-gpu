@@ -6,21 +6,21 @@
 #include"../cl_templates.hpp"
 #endif
 
-void DenovoReadsMendelGPU::init_opencl(){
-  cerr<<"Initializing OpenCL for DenovoReadsMendelGPU\n";
+void GuidedReadsMendelGPU::init_opencl(){
+  cerr<<"Initializing OpenCL for GuidedReadsMendelGPU\n";
   if(run_gpu){
 #ifdef USE_GPU
-    DenovoMendelGPU::init_opencl();
+    GuidedMendelGPU::init_opencl();
     read_penetrance->init_opencl();
   #endif
   }
 }
 
-void DenovoReadsMendelGPU::free_opencl(){
+void GuidedReadsMendelGPU::free_opencl(){
   if(run_gpu){
 #ifdef USE_GPU
     read_penetrance->free_opencl();
-    DenovoMendelGPU::free_opencl();
+    GuidedMendelGPU::free_opencl();
 #endif
   }
 }

@@ -76,7 +76,7 @@ void clSafe (cl_int rc, string functionname) {
 
 void MendelGPU::createKernel(const char * name, cl::Kernel * & kernel){
   ostringstream oss;
-  oss<<"Creating a kernel "<<name;
+  if (debug_opencl) oss<<"Creating a kernel "<<name;
   string mesg = oss.str();
   cerr<<mesg<<endl;
   kernel = new cl::Kernel(*program,name,&err);
@@ -87,7 +87,7 @@ void MendelGPU::runKernel(const char * name, cl::Kernel * & kernel,int wg_x,int 
   ostringstream oss;
   oss<<"Launching kernel "<<name;
   string mesg = oss.str();
-  cerr<<mesg<<endl;
+  if (debug_opencl) cerr<<mesg<<endl;
   err = commandQueue->enqueueNDRangeKernel(*kernel,cl::NullRange,cl::NDRange(wg_x,wg_y,wg_z),cl::NDRange(wi_x,wi_y,wi_z),NULL,NULL);
   clSafe(err,oss.str().data());
 }

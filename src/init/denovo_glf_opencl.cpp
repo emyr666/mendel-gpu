@@ -58,10 +58,6 @@ void DenovoGlfMendelGPU::init_opencl(){
     }
     setArg(kernel_precompute_penetrance_fast,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_precompute_penetrance_fast");
 
-    //buffer_prev_left_marker = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int) * 1, NULL, &err);
-    //clSafe(err,"creating buffer prev left marker");
-    //buffer_center_snp = new cl::Buffer(*context, CL_MEM_READ_ONLY, sizeof(int) * 1, NULL, &err);
-    //clSafe(err,"creating buffer center marker");
   #endif
   }
 }
@@ -72,7 +68,7 @@ void DenovoGlfMendelGPU::free_opencl(){
     delete buffer_snp_penetrance;
     delete kernel_precompute_penetrance_fast;
     delete kernel_impute_penetrance;
-    DenovoMendelGPU::init_opencl();
+    DenovoMendelGPU::free_opencl();
 #endif
   }
 }

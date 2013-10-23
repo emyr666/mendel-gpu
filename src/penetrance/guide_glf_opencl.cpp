@@ -6,7 +6,7 @@
 #endif
 
 
-void GuidedMendelGPU::precompute_penetrance_opencl(){
+void GuidedGlfMendelGPU::precompute_penetrance_opencl(){
   bool debug_penmat = g_left_marker<0;
   cerr<<"Entering precompute_penetrance at left marker "<<g_left_marker<<"\n";
   int debug_subject = 90;

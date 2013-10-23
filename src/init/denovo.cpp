@@ -50,16 +50,16 @@ void DenovoMendelGPU::init_window(){
   //g_haplotype = haplotype;
   bool debug_haplotype = false;
   if (debug_haplotype){
-    if (debug_mode) cerr<<"ASSUMED DOUBLED HAPLOTYPES:\n";
+    cerr<<"ASSUMED DOUBLED HAPLOTYPES:\n";
     for(int i=0;i<g_max_haplotypes;++i){
       if (g_active_haplotype[i]){
-        if (debug_mode) cerr<<i<<":";
+        cerr<<i<<":";
         string curhap(g_markers,zero);
         for(int j=0;j<g_markers;++j){
           curhap[j] = (char)(g_haplotype[i*g_max_window+j]+offset); 
-          if (debug_mode) cerr<<curhap[j];
+          cerr<<curhap[j];
         }
-        if (debug_mode) cerr<<endl;
+        cerr<<endl;
       }
     }
   }

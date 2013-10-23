@@ -14,12 +14,14 @@
 using namespace std;
 
 
+
 class MendelGPU{
 public:
   MendelGPU(IO_manager *io);
   void init();
   virtual ~MendelGPU();
   void run_sliding_window();
+  friend class ReadPenetrance;
 protected:
   virtual void allocate_memory();
   virtual void init_opencl();
@@ -39,23 +41,18 @@ protected:
     int array_index;
     set<string> extended_set;
   };
-  // deprecate these
   static const int UNPHASED_INPUT = 3;
   static const int PHASED_INPUT = 4;
-  //static const int HAPLOTYPE_MODE_DENOVO = 0;
-  //static const int HAPLOTYPE_MODE_GUIDE = 1;
-  string FORMAT_DEFAULT;
-  string FORMAT_MEC;
 
   IO_manager * io_manager;
   Config  * config;
 
   // constants
+  
   float gf_epsilon;
   float gf_convergence_criterion;
   float gf_logpen_threshold;
-  bool debug_mode;
-  bool debug_truth;
+  bool debug_opencl;
   bool run_gpu;
   bool run_cpu;
   int gi_iteration;
@@ -170,11 +167,13 @@ private:
 
 };
 
+
+
 class GuidedMendelGPU:public MendelGPU{
 public:
   GuidedMendelGPU(IO_manager *io);
   ~GuidedMendelGPU();
-private:
+protected:
   struct byHapCountDesc{
     bool operator()(const hapobj_t & p1,const hapobj_t & p2) const{
       // sort in descending order
@@ -194,7 +193,6 @@ private:
   int * extended_root_mapping;
   std::tr1::unordered_map<string,int > ref_hap_counts;
   std::tr1::unordered_map<string,set<string> > full_hap_window;
-  float * g_snp_penetrance;
   int ref_haplotypes;
   char * ref_haplotype;
   int g_max_extended_haplotypes;
@@ -203,6 +201,7 @@ private:
   int packedextendedhap_len;
   packedhap_t * packedextendedhap;
   int * g_informative_haplotype;
+
   #ifdef USE_GPU
   cl::Buffer * buffer_packedhap;
   cl::Buffer * buffer_extended_snp_mapping;
@@ -211,7 +210,6 @@ private:
   cl::Buffer * buffer_extended_frequency;
   cl::Buffer * buffer_center_snp_end;
   cl::Buffer * buffer_packedextendedhap;
-  cl::Buffer * buffer_snp_penetrance;
   cl::Buffer * buffer_subject_posterior_prob_block;
   cl::Buffer * buffer_subject_genotype_block;
   cl::Buffer * buffer_subject_dosage_block;
@@ -220,19 +218,17 @@ private:
   cl::Kernel * kernel_impute_genotype_guide;
   //cl::Kernel * kernel_impute_genotype_guide_haploid;
   #endif
-  void init_window();
   void finalize_window();
   void impute_genotypes();
-  void impute_genotypes_opencl();
-  void load_datasets();
-  void allocate_memory();
-  void init_opencl();
-  void free_opencl();
   void init_window_opencl();
-  void compute_penetrance();
-  int get_max_window_size();
+
+  virtual void compute_penetrance()=0;
+  virtual void allocate_memory();
+  virtual void init_opencl();
+  virtual void free_opencl();
+  virtual void init_window();
+
   // allocates data structures for the host and the GPU
-  void init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps,  int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, int * window2,int * prev_right_marker,float * frequency, float * weight, int * haplotype,int * flanking_snps);
   // functions for reference based haplotyping
   void parse_ref_haplotype();
   void copy_ref_haplotypes(int left_marker);
@@ -240,20 +236,51 @@ private:
   // with ref haps
   void compress(int hapindex,int markers,int * haplotype);
   void decompress(int hapindex,int markers,int * haplotype);
-  void precompute_penetrance();
-  void precompute_penetrance_opencl();
+  //utility functions
+  void compress_extendedhap(int extendedhapindex,int begin,int end,int * extendedhaplotype);
+private:
+  int get_max_window_size();
   // genotype imputation with ref haplotypes
+  void impute_genotypes_opencl();
   void prep_impute_genotypes_guide();
   void prep_impute_genotypes_guide_opencl();
   void impute_genotypes_guide();
   void impute_genotypes_guide_opencl();
+};
 
-  //void impute_diploid_genotypes_guide(int  center_snp_start, 
-  //int  center_snp_end, int  center_snp_offset);
-  //void impute_haploid_genotypes_guide(int  center_snp_start, 
-  //int  center_snp_end, int  center_snp_offset);
-  //utility functions
-  void compress_extendedhap(int extendedhapindex,int begin,int end,int * extendedhaplotype);
+class GuidedGlfMendelGPU:public GuidedMendelGPU{
+public:
+  GuidedGlfMendelGPU(IO_manager *io);
+  ~GuidedGlfMendelGPU();
+private:
+  float * g_snp_penetrance;
+  #ifdef USE_GPU
+  cl::Buffer * buffer_snp_penetrance;
+  #endif
+  void allocate_memory();
+  void compute_penetrance();
+  void precompute_penetrance();
+  void precompute_penetrance_opencl();
+  void load_datasets();
+  void init_opencl();
+  void free_opencl();
+};
+
+class ReadPenetrance;
+
+class GuidedReadsMendelGPU:public GuidedMendelGPU{
+public:
+  GuidedReadsMendelGPU(IO_manager *io);
+  ~GuidedReadsMendelGPU();
+private:
+  ReadPenetrance * read_penetrance;
+  void allocate_memory();
+  void compute_penetrance();
+  void compute_penetrance_opencl();
+  void load_datasets();
+  void init_opencl();
+  void free_opencl();
+  void init_window();
 };
 
 class DenovoMendelGPU:public MendelGPU{
@@ -287,19 +314,15 @@ protected:
   void finalize_window();
   // functions for de novo haplotyping
   void impute_genotypes();
-  void impute_genotypes_opencl();
   void double_haplotypes();
   void prune_haplotypes_();
   // init opencl
   void init_window_opencl();
-  // genotype imputation with no ref haplotypes
-  void impute_haploid_genotypes_denovo_(int  center_snp, int  d_snp);
-  void impute_diploid_genotypes_denovo_(int  center_snp, int  d_snp);
   // utility functions
   void debug_haplotypes(ostream & os);
 
+#ifdef USE_GPU
   cl::Kernel * kernel_impute_genotype_denovo;
-  //cl::Kernel * kernel_impute_genotype_denovo_haploid;
   cl::Buffer * buffer_subject_posterior_prob;
   cl::Buffer * buffer_subject_genotype;
   cl::Buffer * buffer_subject_dosage;
@@ -309,47 +332,29 @@ protected:
   cl::Buffer * buffer_right_edge_dosage;
   cl::Buffer * buffer_twin_hap_index;
   cl::Buffer * buffer_prev_left_marker;
+#endif
 private:
   int get_max_window_size();
+  // genotype imputation with no ref haplotypes
+  void impute_genotypes_opencl();
+  void impute_haploid_genotypes_denovo_(int  center_snp, int  d_snp);
+  void impute_diploid_genotypes_denovo_(int  center_snp, int  d_snp);
 };
 
-class ReadParser;
-  // for BAM files
+
 class DenovoReadsMendelGPU:public DenovoMendelGPU{
 public:
   DenovoReadsMendelGPU(IO_manager *io);
   ~DenovoReadsMendelGPU();
 private:
-  ReadParser *  parsers;
+  ReadPenetrance * read_penetrance;
   void allocate_memory();
   void init_opencl();
   void free_opencl();
-  void populate_read_matrices();
-  void process_read_matrices();
-  void process_read_matrices_opencl();
   void compute_penetrance();
   void init_window();
-  #ifdef USE_GPU
-  cl::Kernel * kernel_reads_compute_penetrance;
-  cl::Kernel * kernel_reads_adjust_penetrance;
-  cl::Buffer * buffer_read_alleles_mat;
-  cl::Buffer * buffer_read_match_logmat;
-  cl::Buffer * buffer_read_mismatch_logmat;
-  cl::Buffer * buffer_mat_rows_by_subject;
-  #endif
   // functions for penetrance calculations of reads
   void load_datasets();
-  float get_bam_loglikelihood(int len,float *  hap1prob,float *  hap2prob);
-  float log_half;
-  int compact_rows;
-  int full_rows;
-  int read_compact_matrix_size;
-  int read_full_matrix_size;
-  //int * superread_indices;
-  int * read_alleles_mat; // has superreads rows
-  float * read_match_logmat; // has superreads*subreads rows
-  float * read_mismatch_logmat;// has superreads*subreads rows
-  int * mat_rows_by_subject;
 };
 
 class DenovoGlfMendelGPU:public DenovoMendelGPU{
@@ -367,18 +372,12 @@ private:
   cl::Buffer * buffer_snp_penetrance;
   #endif
   // allocates data structures for the host and the GPU
-  //void impute_genotypes();
   void allocate_memory();
   void init_opencl();
   void free_opencl();
   void compute_penetrance();
 
   void load_datasets();
-  //void init_window();
-  //void finalize_window();
-  //void init_buffers_(int * active_haplotype,int * max_window,int * max_haplotypes,int * max_extended_haplotypes,int * max_region_size,int * people, int * snps,  int * genotype_imputation,int * haplotypes, int * markers, int * window1,int * prev_left_marker, int * window2,int * prev_right_marker,float * frequency, float * weight, int * haplotype,int * flanking_snps);
-  // allocates region specific data structures for the host and the GPU
-  //void init_region_buffers_(int * regionstart,int * regionend);
   // allocates window specific data structures for the host and the GPU
   void init_window_buffers_();
   // functions for penetrance calculations of SNP data

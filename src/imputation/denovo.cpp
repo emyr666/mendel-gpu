@@ -138,11 +138,11 @@ void DenovoMendelGPU::impute_genotypes(){
     }
     if (geno_dim==3){
       io_manager->writeDosage(current_snp,dosages,g_people);
-      io_manager->writeGenotype(current_snp,genotypes,g_people);
+      float rsq = compute_rsq(dosages,1,0);
+      io_manager->writeQuality(current_snp,rsq);
     }
+    io_manager->writeGenotype(current_snp,genotypes,g_people);
     io_manager->writePosterior(geno_dim,current_snp,posteriors,g_people);
-    float rsq = compute_rsq(dosages,1,0);
-    io_manager->writeQuality(current_snp,rsq);
   }//END CPU VERSION
   cerr<<"done impute_geno\n";
   if (debug_dosage || debug_posterior|| debug_geno) exit(1);

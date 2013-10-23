@@ -32,10 +32,6 @@ void GuidedMendelGPU::allocate_memory(){
 
 }
 
-void GuidedMendelGPU::load_datasets(){
-  cerr<<"Loading dataset for guided haplotyper\n";
-  io_manager->read_input(ref_haplotype,g_snp_penetrance,this->informative_snp,this->g_people,this->g_snps, this->ref_haplotypes);
-}
 
 GuidedMendelGPU::~GuidedMendelGPU(){
   cerr<<"Entering destructor guided haplotyper\n";

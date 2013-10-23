@@ -74,11 +74,11 @@ if (g_active_haplotype[i] && g_active_haplotype[j]){
     }
     if (max_geno==3){
       io_manager->writeDosage(current_snp,subject_dosages,g_people);
-      io_manager->writeGenotype(current_snp,subject_genotypes,g_people);
+      float rsq = compute_rsq(subject_dosages,1,0);
+      io_manager->writeQuality(current_snp,rsq);
     }
+    io_manager->writeGenotype(current_snp,subject_genotypes,g_people);
     io_manager->writePosterior(max_geno,current_snp,posterior,g_people);
-    float rsq = compute_rsq(subject_dosages,1,0);
-    io_manager->writeQuality(current_snp,rsq);
     cerr<<"Elapsed time: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
     #endif
   }

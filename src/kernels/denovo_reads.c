@@ -21,6 +21,9 @@ __local float * hap2_logprob
   if (!active_haplotype[hap1] || !active_haplotype[hap2]) return ;
   int total_depth = mat_rows_by_subject[subject];
   float loglike = 0;
+  if(threadindex==0){
+    logpenetrance_cache[subject*penetrance_matrix_size+hap1*max_haplotypes+hap2] =  loglike;
+  }
   for(int row=0;row<total_depth;++row){
     hap1_logprob[threadindex] = 0;
     hap2_logprob[threadindex] = 0;
@@ -37,7 +40,6 @@ __local float * hap2_logprob
           hap1_logprob[threadindex]+=read_allele==hap1_allele?match:mismatch;
           hap2_logprob[threadindex]+=read_allele==hap2_allele?match:mismatch;
         }
-        
       }
       barrier(CLK_LOCAL_MEM_FENCE);
     }

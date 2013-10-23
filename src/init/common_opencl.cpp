@@ -205,6 +205,7 @@ void MendelGPU::init_window_opencl(){
     writeToBuffer(buffer_left_marker, 1, &g_left_marker, "buffer_left_marker");
     writeToBuffer(buffer_haplotype, g_max_window*g_max_haplotypes, g_haplotype, "buffer_haplotype");
     writeToBuffer(buffer_frequency, g_max_haplotypes, g_frequency, "buffer_frequency");
+    
     #endif
     cerr<<"Buffers sent to GPU for current window\n";
   }

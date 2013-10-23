@@ -20,11 +20,10 @@ struct Config{
   string bimfile;
   string bedfile;
   string sexfile;
-  string bam_manifest_file;
+  string bamfile;
   bool is_phased;
   bool is_sex_chr;
   string glf;
-  vector<string> bamfilevec;
   bool use_gpu;
   bool use_cpu;
   int total_regions;
@@ -47,9 +46,12 @@ public:
   IO_manager();
   ~IO_manager();
   bool load_config(const char * config_filename);
-  // for guide haplotypes
+  // for guide haplotypes glf 
   bool read_input(char * & hap_arr, float * & snp_penetrance, 
   bool * & informative_snp,int & persons, int & snps, int & total_ref_haps);
+  // for guide haplotypes reads 
+  bool read_input(char * & hap_arr, bool * & informative_snp,
+  int & persons, int & snps, int & total_ref_haps);
   // for denovo haplotypes glf
   bool read_input(float * & snp_penetrance,int & persons, int & snps);
   // for denovo haplotypes reads
@@ -77,7 +79,7 @@ private:
   void parse_ref_haplotypes(const char * legend, const char * hapfile);
   void parse_plink(const char * famfile,const char * bimfile, const char * bedfile, bool * & informative_snp);
   void parse_glf(const char * famfile,const char * bimfile, bool is_phased, const char * glf,bool * & informative_snp);
-  void load_bam_settings(const char * famfile, const char * polymorphisms, vector<string> bam_filelist,bool * & informative_snp);
+  void load_bam_settings(const char * famfile, const char * polymorphisms, bool * & informative_snp);
   ofstream ofs_posterior_file;
   ofstream ofs_genotype_file;
   ofstream ofs_dosage_file;

@@ -5,13 +5,13 @@
 
 bool MendelGPU::check_mm_converged(){
   bool debug_freq = false;
-  cerr<<"Doing MM updates\n";
+  if(debug_freq)cerr<<"Doing MM updates\n";
   float d = 0;
   float e = 0;
   float t = 0;
   for(int j=0;j<g_max_haplotypes;++j){
     if (g_active_haplotype[j]){
-      //cerr<<"Current weight of hap "<<j<<" is "<<g_weight[j]<<endl;
+      if(debug_freq) cerr<<"Current weight of hap "<<j<<" is "<<g_weight[j]<<endl;
       if (g_weight[j]<gf_epsilon) g_weight[j] = gf_epsilon;
       if (g_frequency[j] > g_delta) d+=g_weight[j];
       else e+=g_weight[j];
@@ -47,7 +47,7 @@ bool MendelGPU::check_mm_converged(){
     }
   }
   t/=g_haplotypes;
-  cerr<<"MM: T is "<<t<<endl;
+  if(debug_freq)cerr<<"MM: T is "<<t<<endl;
   if (t<gf_convergence_criterion) return true;
   else{
     for(int j=0;j<g_max_haplotypes;++j){
@@ -156,7 +156,7 @@ void MendelGPU::compute_haplotype_weights(){
         //exit(1);
       }
     }
-    cerr<<"Compute haplotype weights: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
+    cerr<<"Elapsed time for CPU compute haplotype weights: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
     if (debug_weights){
       for(int j=0;j<g_max_haplotypes;++j){
         if(g_active_haplotype[j]){

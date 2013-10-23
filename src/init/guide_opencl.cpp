@@ -10,12 +10,9 @@ void GuidedMendelGPU::init_opencl(){
   if(run_gpu){
 #ifdef USE_GPU
     // CREATE ALL KERNELS HERE
-    createKernel("precompute_penetrance",kernel_precompute_penetrance);
     createKernel("impute_genotype_guide",kernel_impute_genotype_guide);
     // CREATE ALL BUFFERS HERE
     createBuffer<packedhap_t>(CL_MEM_READ_ONLY,g_max_haplotypes*packedhap_len,"buffer_packedhap",buffer_packedhap);
-    createBuffer<float>(CL_MEM_READ_ONLY,g_people*geno_dim*g_snps,"buffer_snp_penetrance",buffer_snp_penetrance);
-    writeToBuffer(buffer_snp_penetrance,g_people*geno_dim*g_snps,g_snp_penetrance,"buffer_snp_penetrance");
     createBuffer<int>(CL_MEM_READ_ONLY,g_max_window,"buffer_extended_snp_mapping",buffer_extended_snp_mapping);
     createBuffer<int>(CL_MEM_READ_ONLY,1,"buffer_extended_haplotypes",buffer_extended_haplotypes);
     createBuffer<int>(CL_MEM_READ_ONLY,1,"buffer_center_snp_end",buffer_center_snp_end);
@@ -29,40 +26,6 @@ void GuidedMendelGPU::init_opencl(){
     // SET KERNEL ARGUMENTS HERE
     int arg;
       // PRECOMPUTE PENETRANCE FOR THE GUIDE HAP APPROACH
-      arg = 0;
-      setArg(kernel_precompute_penetrance,arg, g_max_haplotypes,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, g_max_window,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, penetrance_matrix_size,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, g_snps,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, gf_logpen_threshold,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, packedhap_len,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_markers,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_haplotypes,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_left_marker,"kernel_precompute_penetrance");
-      if(geno_dim==UNPHASED_INPUT){
-        setArg(kernel_precompute_penetrance,arg, *buffer_haploid_arr,"kernel_precompute_penetrance");
-      }
-      setArg(kernel_precompute_penetrance,arg, *buffer_packedhap,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_haplotype,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_snp_penetrance,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_logpenetrance_cache,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_penetrance_cache,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, *buffer_extended_snp_mapping,"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, cl::__local(sizeof(int)*g_max_window),"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, cl::__local(sizeof(packedhap_t)*g_max_haplotypes*packedhap_len),"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, cl::__local(sizeof(int)*g_max_window),"kernel_precompute_penetrance");
-      if(geno_dim==UNPHASED_INPUT){
-        setArg(kernel_precompute_penetrance,arg, cl::__local(sizeof(int)*g_max_window),"kernel_precompute_penetrance");
-      }
-      if(geno_dim==PHASED_INPUT){
-        setArg(kernel_precompute_penetrance,arg, cl::__local(sizeof(float)*2*BLOCK_WIDTH),"kernel_precompute_penetrance");
-      }
-      setArg(kernel_precompute_penetrance,arg, cl::__local(sizeof(float)*g_max_window*geno_dim),"kernel_precompute_penetrance");
-      setArg(kernel_precompute_penetrance,arg, cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_precompute_penetrance");
-      cerr<<"Total args for precompute pen: "<<arg<<endl;
-      int kernelWorkGroupSize = kernel_precompute_penetrance->getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>(devices[0], &err);
-      clSafe(err,"get workgroup size kernel precompute_penetrance");
-      cerr<<"precompute_penetrance kernel work group size is "<<kernelWorkGroupSize<<endl;
       arg = 0;
       setArg(kernel_impute_genotype_guide,arg, g_max_haplotypes,"kernel_impute_genotype_guide");
       setArg(kernel_impute_genotype_guide,arg, gf_epsilon,"kernel_impute_genotype_guide");
@@ -96,18 +59,12 @@ void GuidedMendelGPU::init_opencl(){
       setArg(kernel_impute_genotype_guide,arg, cl::__local(sizeof(float)*4),"kernel_impute_genotype_guide");
       setArg(kernel_impute_genotype_guide,arg, cl::__local(sizeof(float)*g_max_haplotypes),"kernel_impute_genotype_guide"); // hap marginals
       setArg(kernel_impute_genotype_guide,arg, cl::__local(sizeof(float)*1),"kernel_impute_genotype_guide"); // normalizing constant
-      kernelWorkGroupSize = kernel_impute_genotype_guide->getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>(devices[0], &err);
+      int kernelWorkGroupSize = kernel_impute_genotype_guide->getWorkGroupInfo<CL_KERNEL_WORK_GROUP_SIZE>(devices[0], &err);
       clSafe(err,"get workgroup size kernel impute_genotype_guide");
       cerr<<"impute_genotype_guide kernel total args, "<<arg<<", work group size is "<<kernelWorkGroupSize<<endl;
 
     cerr<<"GPU kernel arguments assigned.\n";
-
-    // TRANSFER ANY DATA HERE
-    err = commandQueue->enqueueWriteBuffer(*buffer_genotype_imputation, CL_TRUE, 0,sizeof(int), &g_genotype_imputation, NULL, NULL );
-    clSafe(err, "write imputation mode");
-    err = commandQueue->enqueueWriteBuffer(*buffer_haploid_arr, CL_TRUE, 0,sizeof(int)*g_people, haploid_arr, NULL, NULL );
-    clSafe(err, "write haploid arr");
-#endif
+    #endif
   }
   cerr<<"Buffers initialized\n";
 }
@@ -124,10 +81,8 @@ void GuidedMendelGPU::free_opencl(){
     delete buffer_center_snp_end;
     delete buffer_extended_haplotypes;
     delete buffer_extended_snp_mapping;
-    delete buffer_snp_penetrance;
     delete buffer_packedhap;
     delete kernel_impute_genotype_guide;
-    delete kernel_precompute_penetrance;
     MendelGPU::free_opencl();
 #endif
   }

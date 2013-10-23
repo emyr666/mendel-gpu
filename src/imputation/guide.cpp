@@ -9,6 +9,7 @@ void GuidedMendelGPU::impute_genotypes(){
 }
 
 void GuidedMendelGPU::prep_impute_genotypes_guide(){
+  bool debug_mode = false;
   int left_marker = g_left_marker;
   cerr<<"begin prep impute_genotypes at left SNP "<<left_marker<<endl;
   int curhapindex = 0;

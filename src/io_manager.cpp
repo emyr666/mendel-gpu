@@ -4,6 +4,7 @@ using namespace std;
 #include<iostream>
 #include<vector>
 #include<map>
+#include<set>
 #include<bitset>
 #include<boost/property_tree/ptree.hpp>
 #include<boost/property_tree/xml_parser.hpp>
@@ -74,19 +75,6 @@ void IO_manager::writeQuality(int snp_index,float  val){
   write_output(ofs_quality_file,snp_index,1,1,&val);
 }
 
-
-//int IO_manager::get_total_snps(){
-//  return this->snps;
-//}
-//
-//int IO_manager::get_total_persons(){
-//  return this->persons;
-//}
-//
-//int IO_manager::get_total_refhaplotypes(){
-//  return this->refhaplotypes;
-//}
-
 bool IO_manager::load_config(const char * xmlfile){
   cerr<<"Initializing configuration from XML file\n";
   ifstream ifs(xmlfile);
@@ -124,14 +112,7 @@ bool IO_manager::load_config(const char * xmlfile){
       config->g_likelihood_mode = Config::LIKELIHOOD_MODE_READS;
       config->famfile = pt.get<string>("bam_settings.famfile");
       config->bimfile = pt.get<string>("bam_settings.bimfile");
-      config->bam_manifest_file = pt.get<string>("bam_settings.bam_manifest_file");
-      ifstream ifs_bamlist(config->bam_manifest_file.data());
-      if (!ifs_bamlist.is_open()) throw "BAM manifest file not found";
-      string bamfilepath; 
-      while(getline(ifs_bamlist,bamfilepath)){
-        config->bamfilevec.push_back(bamfilepath);
-      }
-      ifs_bamlist.close();
+      config->bamfile = pt.get<string>("bam_settings.bamfile");
     }else{
       throw "Invalid input type.  Valid values are plink, glf, bam.";
     }
@@ -168,7 +149,7 @@ bool IO_manager::load_config(const char * xmlfile){
   return true;
 }
 
-// for guide haplotypes
+// for guide haplotypes glf
 bool IO_manager::read_input(char * & hap_arr, float * & snp_penetrance,
 bool * & informative_snp,int & persons, int & snps, int & total_ref_haps){
   int * haploids = NULL;
@@ -176,6 +157,17 @@ bool * & informative_snp,int & persons, int & snps, int & total_ref_haps){
   informative_snp,haploids, persons, snps, total_ref_haps);
   return ret;
 }
+
+// for guide haplotypes reads
+bool IO_manager::read_input(char * & hap_arr, 
+bool * & informative_snp,int & persons, int & snps, int & total_ref_haps){
+  int * haploids = NULL;
+  float * snp_penetrance = NULL; 
+  bool ret = read_input(hap_arr, snp_penetrance,
+  informative_snp,haploids, persons, snps, total_ref_haps);
+  return ret;
+}
+
 // for denovo haplotypes glf
 bool IO_manager::read_input(float * & snp_penetrance,int & persons, int & snps){
   char * hap_arr = NULL;
@@ -230,7 +222,7 @@ bool IO_manager::read_input(char * & haplotype_array, float * & snp_penetrance, 
       //int geno_dim = config->is_phased?4:3;
     }else if (config->inputformat.compare("bam")==0){
       load_bam_settings(config->famfile.data(), 
-      config->bimfile.data(), config->bamfilevec, informative_snp);
+      config->bimfile.data(),  informative_snp);
     }
     total_persons = this->persons;
     total_snps = this->snps;
@@ -497,10 +489,10 @@ void IO_manager::parse_plink(const char * famfile,const char * bimfile, const ch
     if (config->use_reference_panel)informative_snp[j] = true;
     if (genotype_map.find(position)==genotype_map.end()){
       cerr<<"Will impute position "<<position<<" at index "<<j<<endl;
-      cerr<<"informative_snp "<<j<<":"<<informative_snp[j]<<endl;
       genotype_map[position] = oss_geno.str();
-      if (!config->use_reference_panel) informative_snp[j] = false;
+      if (config->use_reference_panel) informative_snp[j] = false;
     }
+    //cerr<<"informative_snp "<<j<<":"<<informative_snp[j]<<endl;
     ++j;
   }
   delete[] genotypes_snpmajor;
@@ -568,30 +560,36 @@ void IO_manager::parse_glf(const char * famfile,const char * bimfile, bool is_ph
   }
 }
 
-void IO_manager::load_bam_settings(const char * famfile, const char * polymorphisms, vector<string> bam_filelist,bool * & informative_snp){
+void IO_manager::load_bam_settings(const char * famfile, const char * polymorphisms, bool * & informative_snp){
   this->persons = linecount(famfile);
   ifstream ifs_poly(polymorphisms);
   if (!ifs_poly.is_open()) {
     cerr<<"Can't open "<<polymorphisms<<". ";
     throw "File not found.";
   }
-  if (config->use_reference_panel){
-    throw "Reference panels are only supported for non-read data!";
-  }
   string line;
+  set<int> variant_pos_set;
   while(getline(ifs_poly,line)){
     istringstream iss_bim(line);
     string token;
     int position;
     iss_bim>>token>>token>>token>>position>>token>>token;
-    position_vector.push_back(position);
+    variant_pos_set.insert(position);
+    if (!config->use_reference_panel) position_vector.push_back(position);
   }
   ifs_poly.close();
-  this->snps = position_vector.size();
-  // allocate memory for informative_snp
-  if (config->use_reference_panel){
-    informative_snp = new bool[this->snps];
-    for(int j=0;j<this->snps;++j) informative_snp[j] = true;
+  if (!config->use_reference_panel) this->snps = position_vector.size();
+  if (config->use_reference_panel) informative_snp = new bool[this->snps];
+  int j = 0;
+  for(vector<int>::iterator it = position_vector.begin();
+  it!=position_vector.end();it++){
+    int position = *it;
+    if (config->use_reference_panel)informative_snp[j] = true;
+    if (variant_pos_set.find(position)==variant_pos_set.end()){
+      cerr<<"Will impute position "<<position<<" at index "<<j<<endl;
+      if (config->use_reference_panel) informative_snp[j] = false;
+    }
+    ++j;
   }
 }
 

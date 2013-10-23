@@ -3,10 +3,10 @@ PREPROC=-DUSE_GPU
 CL_ROOT=/home/garyc/software/ati-stream-sdk-v2.2-lnx64
 # 1st arg make sure you see directory CL under include
 # 2nd arg make sure you see directory GL under include 
-CINC_FLAGS=-I$(CL_ROOT)/include -I/usr/local/cuda_sdk/shared/inc -I /home/garyc/software/samtools-0.1.19
+CINC_FLAGS=-g -I$(CL_ROOT)/include -I/usr/local/cuda_sdk/shared/inc -I /home/garyc/software/samtools-0.1.19
 FINC_FLAGS=-I./finclude/
 # 1st arg make sure libOpenCL.so is under lib
-LINK_FLAGS=-lgfortran -lOpenCL -lstdc++ -lz
+LINK_FLAGS=-g -lgfortran -lOpenCL -lstdc++ -lz
 LINKER=g++
 #LINKER=gfortran
 C_COMPILER=g++
