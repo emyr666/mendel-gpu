@@ -134,7 +134,7 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
         cout<<"fast CPU for person "<<debug_penmat_person<<":\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<":";
+            cout<<j<<":";
             for(int k=0;k<g_max_haplotypes;++k){
               if (g_active_haplotype[k]){
                 cout<<" "<<penetrance_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
