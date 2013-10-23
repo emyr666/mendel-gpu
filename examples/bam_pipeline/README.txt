@@ -1,0 +1,5 @@
+This directory presents a template or example of how one could generate the compressed BAM compliant files that are input into MendelGPU.  The pre-requisite for running this example is the samtools library. Be sure the samtools executables are in the search path.
+
+./make_bam.sh presents a workflow where we have genotypes (called from a variant caller for example) saved in directory variants3.  The script takes in the subject index as the only argument. It reads variants for the file in variants3 associated with the subject index, then proceeds to simulate reads using the art_illumina simulator program.  A large BAM file is created in an intermediate step, but our compress utility transforms this BAM file to a compact version, which is then saved in ../bam/bamfiles folder.
+
+./loop.sh is a simple convenience wrapper that loops over make_bam.sh to generate 100 compressed BAM files so that MendelGPU has the necessary input files.  It is also necessary to copy bamsnps.bim over to ../bam so that MendelGPU knows which SNPs to query for in the compressed BAM files.

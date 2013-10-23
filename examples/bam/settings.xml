@@ -1,0 +1,46 @@
+<model>1</model><!--specify 1 for MM based imputation, 2 for MM based phasing, 3 for matrix completion based imputation-->
+<use_reference_panel>1</use_reference_panel>
+<reference_panel_settings>
+  <max_reference_haplotypes>1094</max_reference_haplotypes>
+  <legend>top100.legend</legend>
+  <haplotypes>top100.hap</haplotypes>
+</reference_panel_settings>
+<chromosome>1</chromosome>
+<input_type>bam</input_type><!--valid entries are [plink|glf|bam]-->
+<plink_settings>
+  <famfile>study.fam</famfile>
+  <bimfile>study.bim</bimfile>
+  <bedfile>study.bed</bedfile>
+</plink_settings>
+<glf_settings>
+  <famfile></famfile>
+  <bimfile></bimfile>
+  <phased_input></phased_input><!--0 if unphased, 1 if phased-->
+  <glf></glf>
+</glf_settings>
+<bam_settings>
+  <famfile>bamsamples.fam</famfile>
+  <bimfile>bamsnps.bim</bimfile>
+  <bamfile>merged.bam</bamfile>
+</bam_settings>
+<use_gpu>0</use_gpu>
+<use_cpu>1</use_cpu> 
+<tuning_parameters>
+  <total_regions>1</total_regions> <!--increase if memory is a concern-->
+  <flanking_snps>3</flanking_snps>
+  <max_haplotypes>16</max_haplotypes>
+  <delta>1e-4</delta>
+  <lambda>1e3</lambda>
+  <debug>0</debug><!--yes=1, no=0-->
+</tuning_parameters>
+<output_settings>
+  <format>default</format>
+  <posterior>POSTERIORS</posterior>
+  <genotype>GENOTYPES</genotype>
+  <dosage>DOSAGE</dosage>
+  <quality>QUALITY</quality>
+</output_settings>
+<opencl_settings>
+  <platform_id>0</platform_id>
+  <device_id>0</device_id>
+</opencl_settings>
