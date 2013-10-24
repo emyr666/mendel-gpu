@@ -480,7 +480,7 @@ int ReadParser::pileup_func_old(uint32_t tid, uint32_t querypos, int n, const ba
 }
 
 
-void ReadParser::extract_region(int subject,int offset,int snps){
+void ReadParser::extract_region(int subject,int offset,int snps,bool clear_cache){
   if (debug) cerr<<"Selected subject "<<subject<<endl;
   ostringstream oss_subject;
   oss_subject<<subject;
@@ -538,21 +538,23 @@ void ReadParser::extract_region(int subject,int offset,int snps){
     ++tmp->cursor;
     if(subject==test_subject ) cerr<<"Matrix row,col is now "<<matrix_rows<<","<<cursor<<endl;
   }
-  //cerr<<" clear out things from "<<last_left_marker<<" onwards\n";
-  for(int snpindex=last_left_marker;snpindex<offset;++snpindex){
-    //cerr<<"In deleter of subject "<<subject<<" and snpindex "<<snpindex<<"\n";
-    pileup_key_t key;
-    key.subject = subject_str;
-    key.querypos = position_vec[snpindex];
-    pileup_map_t::iterator it = pileup_map.find(key);
-    if (it!=pileup_map.end()){
-      if(subject==test_subject)cerr<<"Deleting subject "<<key.subject<<" and pos "<<key.querypos<<endl;
-      pileup_map.erase(it);
-    }
-    pileup_set_t::iterator it2 = untyped_pileup_set.find(key);
-    if (it2!=untyped_pileup_set.end()){
-      if(subject==test_subject)cerr<<"Deleting untyped subject "<<key.subject<<" and pos "<<key.querypos<<endl;
-      untyped_pileup_set.erase(it2);
+  if (clear_cache){
+    //cerr<<" clear out things from "<<last_left_marker<<" onwards\n";
+    for(int snpindex=last_left_marker;snpindex<offset;++snpindex){
+      //cerr<<"In deleter of subject "<<subject<<" and snpindex "<<snpindex<<"\n";
+      pileup_key_t key;
+      key.subject = subject_str;
+      key.querypos = position_vec[snpindex];
+      pileup_map_t::iterator it = pileup_map.find(key);
+      if (it!=pileup_map.end()){
+        if(subject==test_subject)cerr<<"Deleting subject "<<key.subject<<" and pos "<<key.querypos<<endl;
+        pileup_map.erase(it);
+      }
+      pileup_set_t::iterator it2 = untyped_pileup_set.find(key);
+      if (it2!=untyped_pileup_set.end()){
+        if(subject==test_subject)cerr<<"Deleting untyped subject "<<key.subject<<" and pos "<<key.querypos<<endl;
+        untyped_pileup_set.erase(it2);
+      }
     }
   }
 }
@@ -697,7 +699,7 @@ int main_readpen(int argc, char *argv[])
     //ReadParser::parse_positions(variants_file);
     ReadParser * parser = new ReadParser();
     parser->init(bam_filename,variants_file);
-    parser->extract_region(subject,offset,total_regions);
+    parser->extract_region(subject,offset,total_regions,false);
       //const char * region = "20:60522-60522";
     parser->print_data();
     delete parser;

@@ -10,7 +10,7 @@ GuidedReadsMendelGPU::GuidedReadsMendelGPU(IO_manager * io):GuidedMendelGPU(io){
 void GuidedReadsMendelGPU::allocate_memory(){
   GuidedMendelGPU::allocate_memory();
   read_penetrance = new ReadPenetrance(this);
-  //ReadPenetrance::init(g_max_window,g_people);
+  read_penetrance->prefetch_reads(0,2*g_flanking_snps);
 }
 
 void GuidedReadsMendelGPU::load_datasets(){

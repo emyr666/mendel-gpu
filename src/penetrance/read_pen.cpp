@@ -7,13 +7,27 @@
 #endif
 
 
+void ReadPenetrance::prefetch_reads(int start_snp, int total_snps){
+  // delegate call to the reads parser
+  if (start_snp<mendelgpu->g_snps){
+    double start = clock();
+    int snps2fetch = start_snp+total_snps<=mendelgpu->g_snps?total_snps:
+    mendelgpu->g_snps-start_snp;
+    cerr<<"Prefetching reads for "<<snps2fetch<<" SNPs starting from SNP "<<start_snp<<endl;
+    for(int subject_index=0;subject_index<mendelgpu->g_people;++subject_index){
+      parser->extract_region(subject_index,start_snp,total_snps,false);
+    }
+    cerr<<"Prefetch time is "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
+  }
+}
+
 void ReadPenetrance::populate_read_matrices(){
   Config * config = mendelgpu->config;
   double start = clock();
   cerr<<"Extracting reads at left marker "<<mendelgpu->g_left_marker<<" with region length "<<mendelgpu->g_markers<<"\n";
   for(int subject=0;subject<mendelgpu->g_people;++subject){
     bool debug = mendelgpu->g_markers<0 && (subject==10||subject==11);
-    parser->extract_region(subject,mendelgpu->g_left_marker,mendelgpu->g_markers);
+    parser->extract_region(subject,mendelgpu->g_left_marker,mendelgpu->g_markers,true);
     if(debug) cerr<<"Printing subject "<<subject<<"\n";
     if(debug)parser->print_data();
     // GPU friendly implementation

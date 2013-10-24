@@ -82,7 +82,7 @@ public:
   ~ReadParser();
   void init(const char * bam, const char * pos_file);
 
-  void extract_region(int subject_index,int snp_offset,int snps);
+  void extract_region(int subject_index,int snp_offset,int snps,bool clear_cache);
   void print_data();
   
   static void init_phred_lookup();
@@ -152,6 +152,7 @@ class ReadPenetrance:public read_constants_t{
 public:
   ReadPenetrance(MendelGPU * mendelgpu);
   ~ReadPenetrance();
+  void prefetch_reads(int start_snp, int total_snps);
   void populate_read_matrices();
   void process_read_matrices();
   void init_opencl();

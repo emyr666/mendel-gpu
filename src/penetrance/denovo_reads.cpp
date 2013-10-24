@@ -8,8 +8,11 @@
 
 
 void DenovoReadsMendelGPU::compute_penetrance(){
+  double start = clock();
   read_penetrance->populate_read_matrices();
   read_penetrance->process_read_matrices();
+  read_penetrance->prefetch_reads(g_left_marker+g_markers,1);
+  cerr<<"Compute denovo reads penentrance in "<<(clock()-start)/CLOCKS_PER_SEC<<" seconds.\n";
 }
 
 

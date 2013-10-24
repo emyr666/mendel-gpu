@@ -25,7 +25,7 @@ impute::
 	for dir in $(DIRS); do(cd $$dir; make $1 || exit 1) || exit 1; done
 
 impute:: $(COMMON_OBJS)
-	$(LINKER) -o $(PROGRAM) $(LINK_FLAGS) $(SUB_OBJS) $(COMMON_OBJS)  -L. -ltools $(LIBDIR)/libbam.a
+	$(LINKER) -o $(PROGRAM) $(LINK_FLAGS) $(SUB_OBJS) $(COMMON_OBJS)  -L. $(SAMTOOLS)/libbam.a
 
 matrix_completion.o: matrix_completion.f90
 	$(F_COMPILER) $(FINC_FLAGS) -c $<

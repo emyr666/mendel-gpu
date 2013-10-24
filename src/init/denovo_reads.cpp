@@ -11,7 +11,7 @@ void DenovoReadsMendelGPU::allocate_memory(){
   cerr<<"Initializing variables for denovo reads haplotyper\n";
   cerr<<"Analysis on "<<g_snps<<" SNPs and "<<g_people<<" persons\n";
   read_penetrance = new ReadPenetrance(this);
-  //ReadPenetrance::init(g_max_window,g_people);
+  read_penetrance->prefetch_reads(0,1);
   cerr<<"Initialized variables for denovo reads haplotyper\n";
 }
 

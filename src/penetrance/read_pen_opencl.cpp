@@ -14,16 +14,16 @@ void ReadPenetrance::process_read_matrices_opencl(){
   int debug_penmat_person = 11;
   if (mendelgpu->run_gpu){
 #ifdef USE_GPU
-    double start = clock();
+  //  double start = clock();
     mendelgpu->writeToBuffer(buffer_read_alleles_mat,mendelgpu->g_people*read_compact_matrix_size,read_alleles_mat,"buffer_read_alleles_mat");
     mendelgpu->writeToBuffer(buffer_read_match_logmat,mendelgpu->g_people*read_compact_matrix_size,read_match_logmat,"buffer_read_match_logmat");
     mendelgpu->writeToBuffer(buffer_read_mismatch_logmat,mendelgpu->g_people*read_compact_matrix_size,read_mismatch_logmat,"buffer_read_mismatch_logmat");
     mendelgpu->writeToBuffer(buffer_mat_rows_by_subject,mendelgpu->g_people,mat_rows_by_subject,"buffer_mat_rows_by_subject");
     mendelgpu->runKernel("reads_compute_penetrance",kernel_reads_compute_penetrance,mendelgpu->g_max_haplotypes*BLOCK_WIDTH,mendelgpu->g_max_haplotypes,mendelgpu->g_people,BLOCK_WIDTH,1,1);
     mendelgpu->runKernel("reads_adjust_penetrance",kernel_reads_adjust_penetrance,mendelgpu->g_people*BLOCK_WIDTH,1,1,BLOCK_WIDTH,1,1);
-    int iteration;
-    mendelgpu->readFromBuffer(mendelgpu->buffer_iteration, 1,&iteration,"mendelgpu->buffer_iteration");
-    cerr<<"Elapsed time for GPU process_read_matrices: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
+    //int iteration;
+    //mendelgpu->readFromBuffer(mendelgpu->buffer_iteration, 1,&iteration,"mendelgpu->buffer_iteration");
+    //cerr<<"Elapsed time for GPU process_read_matrices: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
     if(debug_penmat){
       float * debug_cache = new float[mendelgpu->g_people*penetrance_matrix_size];
       float * debug_logcache = new float[mendelgpu->g_people*penetrance_matrix_size];
