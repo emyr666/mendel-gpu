@@ -24,6 +24,9 @@ common_opencl.o: common_opencl.cpp ../cl_templates.hpp ../cl_constants.h
 denovo_glf.o: denovo_glf.cpp ../cl_constants.h
 	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
+denovo_glf_opencl.o: denovo_glf_opencl.cpp ../cl_templates.hpp ../cl_constants.h
+	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
+
 denovo_reads.o: denovo_reads.cpp ../cl_templates.hpp ../cl_constants.h
 	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 

@@ -19,8 +19,15 @@ void ReadPenetrance::process_read_matrices_opencl(){
     mendelgpu->writeToBuffer(buffer_read_match_logmat,mendelgpu->g_people*read_compact_matrix_size,read_match_logmat,"buffer_read_match_logmat");
     mendelgpu->writeToBuffer(buffer_read_mismatch_logmat,mendelgpu->g_people*read_compact_matrix_size,read_mismatch_logmat,"buffer_read_mismatch_logmat");
     mendelgpu->writeToBuffer(buffer_mat_rows_by_subject,mendelgpu->g_people,mat_rows_by_subject,"buffer_mat_rows_by_subject");
-    mendelgpu->runKernel("reads_compute_penetrance",kernel_reads_compute_penetrance,mendelgpu->g_max_haplotypes*BLOCK_WIDTH,mendelgpu->g_max_haplotypes,mendelgpu->g_people,BLOCK_WIDTH,1,1);
+    int iteration;
+    //double start = clock();
+    mendelgpu->runKernel("reads_compute_penetrance",kernel_reads_compute_penetrance,mendelgpu->g_max_haplotypes*SMALL_BLOCK_WIDTH,mendelgpu->g_max_haplotypes,mendelgpu->g_people,SMALL_BLOCK_WIDTH,1,1);
+    //mendelgpu->readFromBuffer(mendelgpu->buffer_iteration, 1,&iteration,"mendelgpu->buffer_iteration");
+    //cerr<<"Elapsed time for GPU read_compute_pen: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
+    //start = clock();
     mendelgpu->runKernel("reads_adjust_penetrance",kernel_reads_adjust_penetrance,mendelgpu->g_people*BLOCK_WIDTH,1,1,BLOCK_WIDTH,1,1);
+    //mendelgpu->readFromBuffer(mendelgpu->buffer_iteration, 1,&iteration,"mendelgpu->buffer_iteration");
+    //cerr<<"Elapsed time for GPU adjust_pen: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
     //int iteration;
     //mendelgpu->readFromBuffer(mendelgpu->buffer_iteration, 1,&iteration,"mendelgpu->buffer_iteration");
     //cerr<<"Elapsed time for GPU process_read_matrices: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;

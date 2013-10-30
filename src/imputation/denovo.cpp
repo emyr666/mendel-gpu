@@ -14,8 +14,8 @@ void DenovoMendelGPU::impute_genotypes(){
   cerr<<"begin diploid impute_genotypes at SNP "<<current_snp<<", center: "<<c_snp<<endl;
   bool debug_dosage = false;
   bool debug_geno = false;
-  bool debug_posterior = current_snp==-94;
-  bool debug_pen = false; 
+  bool debug_posterior = g_left_marker<-1;
+  bool debug_pen = false;
   bool debug_subject = 0;
   int geno_dim = g_genotype_imputation?3:4;
   cerr<<"Max geno "<<geno_dim<<endl;
@@ -41,13 +41,16 @@ void DenovoMendelGPU::impute_genotypes(){
       int best_pair[2];
       best_pair[0] = best_pair[1] = 0;
       for(int j=0;j<4;++j) posterior_prob[j] = gf_epsilon;
-      for(int j=0;j<g_max_haplotypes;++j){
+      for(int a=0;a<g_max_haplotypes;++a){
+        int j = g_hap_perm[a];
+        //int j = a;
         if(g_active_haplotype[j] ){
-          for(int k=j;k<g_max_haplotypes;++k){
+          for(int b=a;b<g_max_haplotypes;++b){
+            //int k = b;
+            int k = g_hap_perm[b];
             if(g_active_haplotype[k] && (!haploid || j==k)){
               int m;
               float penetrance = penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
-              //float penetrance = 0;
               if (penetrance>0 ){
                 //cerr<<"Subject "<<i<<" penetrance at haps "<<j<<" and "<<k<<" :" <<penetrance<<endl;
                 float freq = g_frequency[j]*g_frequency[k];
@@ -63,8 +66,14 @@ void DenovoMendelGPU::impute_genotypes(){
                 }else{
                   m = 2*center_dosage[j] + center_dosage[k];
                 }
-                if (debug_pen && debug_subject==i) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
+                if (m<0 || m>3){
+                  cerr<<"Error found for i,a,b,j,k,center_dosage[j],center_dosage[k],active[j],active[k]:"<<i<<","<<a<<","<<b<<","<<j<<","<<k<<","<<center_dosage[j]<<","<<center_dosage[k]<<","<<g_active_haplotype[j]<<","<<g_active_haplotype[k]<<endl;
+                  exit(1);
+                }
                 posterior_prob[m]+=p;
+                if (debug_pen && debug_subject==i) cerr<<"i,j,k,m,pen,freq:"<<i<<","<<j<<","<<k<<","<<m<<","<<penetrance<<","<<freq<<endl;
+              }else{
+                if (debug_pen && debug_subject==i) cerr<<"i,j,k:"<<i<<","<<j<<","<<k<<endl;
               }
             }
           }
@@ -79,11 +88,11 @@ void DenovoMendelGPU::impute_genotypes(){
         posterior_prob[j]/=denom;
       }
       if (debug_posterior){
-        cout<<"CPU_POSTERIOR "<<current_snp<<","<<i;
+        cerr<<"CPU_POSTERIOR "<<current_snp<<","<<i;
         for(int j=0;j<geno_dim;++j){
-          cout<<" "<<posterior_prob[j];
+          cerr<<" "<<posterior_prob[j];
         }
-        cout<<endl;
+        cerr<<endl;
       }
       if (denom==0) {
         cerr<<"divide by zero denom\n"; 
@@ -113,7 +122,7 @@ void DenovoMendelGPU::impute_genotypes(){
         dosages[i]+=j*p;
       }
       if (debug_dosage){
-          cout<<"CPU_DOSAGE:\t"<<i<<"\t"<<current_snp<<"\t"<<dosages[i]<<endl;
+          cerr<<"CPU_DOSAGE:\t"<<i<<"\t"<<current_snp<<"\t"<<dosages[i]<<endl;
       }
       //subject_dosages[i] = dose;
       float maxval = 0;
@@ -131,7 +140,7 @@ void DenovoMendelGPU::impute_genotypes(){
           }
         }  
         if (debug_geno){
-          cout<<"CPU GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<geno1<<","<<geno2<<endl;
+          cerr<<"CPU GENO:\t"<<i<<"\t"<<current_snp<<"\t"<<geno1<<","<<geno2<<endl;
         }
         genotypes[i] = geno2;
       }

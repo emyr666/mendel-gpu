@@ -47,7 +47,9 @@ struct pileup_val_t:public read_constants_t{
   pileup_val_t();
   ~pileup_val_t();
   int total_reads;
+  int total_positions;
   //string read_names[MAX_SUPERREADS]; 
+  int positions[MAX_MATRIX_WIDTH];
   int depths[MAX_SUPERREADS];
   int lengths[MAX_SUPERREADS];
   int alleles[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
@@ -73,6 +75,7 @@ struct by_subject_pos{
 };
 
 typedef map<pileup_key_t,pileup_val_t,by_subject_pos> pileup_map_t;
+typedef multimap<pileup_key_t,pileup_val_t,by_subject_pos> pileup_multimap_t;
 typedef set<pileup_key_t,by_subject_pos> pileup_set_t;
 
 class ReadParser:public read_constants_t{
@@ -110,19 +113,23 @@ public:
 private:
 
   static bool debug; 
-  static bool use_cache;
+  //static bool use_cache;
 
   void parse_positions(const char * filename);
+  void add_to_pileup_maps(pileup_key_t & key,pileup_val_t & val);
   //vector<int> positions;
   set<int> position_set;
   vector<int> position_vec;
-  pileup_set_t untyped_pileup_set;
+  //pileup_set_t untyped_pileup_set;
   pileup_map_t pileup_map;
+  pileup_multimap_t partial_pileup_map;
   int last_left_marker;
+  bool pileups_found;
   int cursor;
   bam_index_t *idx;
   const char * bam_filename;
   //const char * variants_file;
+  void make_partial_pileup(int lastfound_position,int current_position,int offset,pileup_key_t & key, pileup_val_t & val);
   
   
   

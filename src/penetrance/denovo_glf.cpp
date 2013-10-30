@@ -9,6 +9,7 @@ void DenovoGlfMendelGPU::compute_penetrance(){
 
 void DenovoGlfMendelGPU::precompute_penetrance_fast(){
   cerr<<"Entering precompute_penetrance_fast on center_snp "<<g_center_snp_start<<"\n";
+  cerr<<"Prev left marker is "<<g_prev_left_marker<<endl;
   int last_marker = g_markers-1;
   //cerr<<"Taking hap doses at site "<<last_marker<<" and prev and current left marker: "<<g_prev_left_marker<<","<<g_left_marker<<"\n";
   //cerr<<"right edge dosage: ";
@@ -26,7 +27,7 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
   }
   int debug_penmat_person = 0;
   //bool debug_penmat = g_markers==-6;
-  bool debug_penmat = g_left_marker==-91;
+  bool debug_penmat = g_left_marker==-1;
   if(run_cpu){
     double start = clock();
     for(int i=0;i<g_people;++i){
@@ -120,28 +121,28 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
     }
     if(debug_penmat){
       if (geno_dim==PHASED_INPUT){
-        cout<<"fast CPU for person "<<debug_penmat_person<<":\n";
+        cerr<<"fast CPU for person "<<debug_penmat_person<<":\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<2;++k){
-              cout<<" "<<logpenetrance_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
+              cerr<<" "<<logpenetrance_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
       }else if (geno_dim==UNPHASED_INPUT){ 
-        cout<<"fast CPU for person "<<debug_penmat_person<<":\n";
+        cerr<<"fast CPU for person "<<debug_penmat_person<<":\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<g_max_haplotypes;++k){
               if (g_active_haplotype[k]){
-                cout<<" "<<penetrance_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
-                //cout<<" "<<logpenetrance_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
+                cerr<<" "<<penetrance_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
+                //cerr<<" "<<logpenetrance_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
               }
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
       }
@@ -207,27 +208,27 @@ void DenovoGlfMendelGPU::impute_penetrance_matrix(){
       }
     }
     if(debug_penmat){
-      cout<<"CPU for person "<<debug_penmat_person<<":\n";
+      cerr<<"CPU for person "<<debug_penmat_person<<":\n";
       if (geno_dim==PHASED_INPUT){
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<2;++k){
-              cout<<" "<<logpenetrance_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
+              cerr<<" "<<logpenetrance_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
       }else if (geno_dim==UNPHASED_INPUT){
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<g_max_haplotypes;++k){
               if (g_active_haplotype[k]){
-                cout<<" "<<logpenetrance_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
+                cerr<<" "<<logpenetrance_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
               }
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
       }

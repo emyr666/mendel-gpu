@@ -42,7 +42,6 @@ tempsnplist=$snpfile
 $bin_dir/compress $subject $tempsnplist $sorted.bam $reffasta 2> compressed.debug > $compressed.sam
 rm compressed.debug 
 #samtools view -bT $reffasta $compressed.sam > $compressed_bam_dir/$compressed.bam
-#rm $compressed.sam
 #samtools index $compressed_bam_dir/$compressed.bam
 # make VCF pass2
 samtools mpileup -uf $reffasta $sorted.bam | bcftools view - | $bin_dir/filter_vcf $tempsnplist > $subject_vcf

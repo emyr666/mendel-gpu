@@ -6,6 +6,7 @@ include include.mk
 DIRS=init
 DIRS+=penetrance
 DIRS+=imputation
+DIRS+=bam_utility
 
 LIBDIR=../lib
 
@@ -46,5 +47,5 @@ cl_templates.o: cl_templates.cpp cl_templates.hpp
 	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
 clean:
-	for dir in $(DIRS); do(cd $$dir; rm -f *.o  || exit 1) || exit 1; done
+	for dir in $(DIRS); do(cd $$dir; make clean || exit 1) || exit 1; done
 	rm -f $(PROGRAM) $(OBJS) *.mod *.o

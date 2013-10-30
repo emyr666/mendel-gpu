@@ -7,7 +7,7 @@
 
 void DenovoGlfMendelGPU::precompute_penetrance_fast_opencl(){
   //bool debug_penmat = g_markers==-6;
-  bool debug_penmat = g_left_marker==-91;
+  bool debug_penmat = g_left_marker==-1;
   int debug_penmat_person = 0;
   if (run_gpu){
 #ifdef USE_GPU
@@ -21,14 +21,14 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast_opencl(){
         float * debug_cache = new float[g_people*2*g_max_haplotypes];
         err = commandQueue->enqueueReadBuffer(*buffer_logpenetrance_cache, CL_TRUE, 0, sizeof(float)*g_people*2*g_max_haplotypes,debug_cache);
         clSafe(err, "read penetrance cache");
-        cout<<"fast GPU for person "<<debug_penmat_person<<":\n";
+        cerr<<"fast GPU for person "<<debug_penmat_person<<":\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<2;++k){
-              cout<<" "<<debug_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
+              cerr<<" "<<debug_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
         delete[] debug_cache;
@@ -36,16 +36,16 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast_opencl(){
         float * debug_cache = new float[g_people*penetrance_matrix_size];
         readFromBuffer(buffer_penetrance_cache, g_people*penetrance_matrix_size,debug_cache,"buffer_penetrance_cache");
         clSafe(err, "read penetrance cache");
-        cout<<"fast GPU for person "<<debug_penmat_person<<":\n";
+        cerr<<"fast GPU for person "<<debug_penmat_person<<":\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<g_max_haplotypes;++k){
               if (g_active_haplotype[k]){
-                cout<<" "<<debug_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
+                cerr<<" "<<debug_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
               }
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
         delete[] debug_cache;
@@ -80,14 +80,14 @@ void DenovoGlfMendelGPU::impute_penetrance_matrix_opencl(){
       if (geno_dim==PHASED_INPUT){
         float * debug_cache = new float[g_people*2*g_max_haplotypes];
         readFromBuffer(buffer_logpenetrance_cache,g_people*2*g_max_haplotypes,debug_cache,"buffer_logpenetrance_cache");
-        cout<<"GPU for person "<<debug_penmat_person<<":\n";
+        cerr<<"GPU for person "<<debug_penmat_person<<":\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<2;++k){
-              cout<<" "<<debug_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
+              cerr<<" "<<debug_cache[debug_penmat_person*g_max_haplotypes*2+j*2+k];
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
         delete[] debug_cache;
@@ -95,16 +95,16 @@ void DenovoGlfMendelGPU::impute_penetrance_matrix_opencl(){
         float * debug_cache = new float[g_people*penetrance_matrix_size];
 cerr<<"g_max_haplotypes "<<g_max_haplotypes<<" and people "<<g_people<<endl;
         readFromBuffer(buffer_logpenetrance_cache,g_people*penetrance_matrix_size,debug_cache,"buffer_logpenetrance_cache");
-        cout<<"GPU for person "<<debug_penmat_person<<":\n";
+        cerr<<"GPU for person "<<debug_penmat_person<<":\n";
         for(int j=0;j<g_max_haplotypes;++j){
           if (g_active_haplotype[j]){
-            cout<<j<<":";
+            cerr<<j<<":";
             for(int k=0;k<g_max_haplotypes;++k){
               if (g_active_haplotype[k]){
-                cout<<" "<<debug_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
+                cerr<<" "<<debug_cache[debug_penmat_person*penetrance_matrix_size+j*g_max_haplotypes+k];
               }
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
         delete[] debug_cache;

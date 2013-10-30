@@ -30,6 +30,8 @@ void ReadPenetrance::init_opencl(){
     mendelgpu->setArg(kernel_reads_compute_penetrance,arg,*mendelgpu->buffer_haplotype,"kernel_reads_compute_penetrance");
     mendelgpu->setArg(kernel_reads_compute_penetrance,arg,*mendelgpu->buffer_logpenetrance_cache,"kernel_reads_compute_penetrance");
     mendelgpu->setArg(kernel_reads_compute_penetrance,arg,*mendelgpu->buffer_active_haplotype,"kernel_reads_compute_penetrance");
+    mendelgpu->setArg(kernel_reads_compute_penetrance,arg,cl::__local(sizeof(int)*mendelgpu->g_max_window),"kernel_reads_compute_penetrance");
+    mendelgpu->setArg(kernel_reads_compute_penetrance,arg,cl::__local(sizeof(int)*mendelgpu->g_max_window),"kernel_reads_compute_penetrance");
     mendelgpu->setArg(kernel_reads_compute_penetrance,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_reads_compute_penetrance");
     mendelgpu->setArg(kernel_reads_compute_penetrance,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_reads_compute_penetrance");
 

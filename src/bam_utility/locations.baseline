@@ -1,0 +1,7 @@
+CINC_FLAGS=-I /home/garyc/software/samtools-0.1.19  -Wall -g
+FINC_FLAGS=-I./finclude/
+LINKER=g++
+LINK_FLAGS=-lm -lz -lpthread
+LIBDIR=/home/garyc/software/samtools-0.1.19
+BINDIR=.
+

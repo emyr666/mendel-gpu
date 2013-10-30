@@ -140,23 +140,13 @@ void GuidedMendelGPU::parse_ref_haplotype(){
 
 void GuidedMendelGPU::copy_ref_haplotypes(int left_marker){
   bool debug_haplotype = false;
-  //int left_marker = g_left_marker[0]-1;
   int marker_len = g_markers;
   // save the original # of markers from MENDEL
   extended_markers = marker_len;
   cerr<<"Including guide haplotypes of length: "<<marker_len<<" at left marker: "<<left_marker<<endl;
-  //for(int j=0;j<100;++j){
-    //cerr<<"debug load "<<j<<","<<informative_snp[j];
-  //}
-  //cerr<<endl;
-  //cerr<<"got here copy 2\n";
-  // generate a hash table of unique template haplotypes
-  std::tr1::unordered_map<string,set<string> > temp_hap_window;
-  //map<string,set<string> > temp_hap_window;
   for(int i=0;i<g_max_haplotypes;++i) g_active_haplotype[i] = 0;
   g_informative_markers = 0;
   for(int j=0;j<marker_len;++j){
-    //cerr<<"Querying informative snp at pos "<<left_marker+j<<" and has value "<<informative_snp[left_marker+j]<<endl;
      if (informative_snp[left_marker+j]){
       extended_snp_mapping[g_informative_markers] = j;
       ++g_informative_markers;
@@ -164,18 +154,29 @@ void GuidedMendelGPU::copy_ref_haplotypes(int left_marker){
   }
   // notify MENDEL that the # of markers is temporarily reduced
   g_markers = g_informative_markers;
-  //cerr<<"Informative markers: "<<g_markers<<endl;
-  // tally up the counts of each reference haplotype
+  map<string,int> original_hap_order;
+  int order = 0;
   ref_hap_counts.clear();
   for(int i=0;i<ref_haplotypes;++i){
     string curhap_long(ref_haplotype+i*g_snps+left_marker,marker_len);
-    //cerr<<"ref hap of "<<curhap_long<<endl;
+    char shorthap[g_informative_markers];
+    for(int j=0;j<g_informative_markers;++j){
+      shorthap[j] = curhap_long[extended_snp_mapping[j]];
+    }
+    // record the original order
+    string curhap_short(shorthap,g_informative_markers);
+    if (original_hap_order.find(curhap_short)==original_hap_order.end()){
+      original_hap_order[curhap_short] = order;
+      ++order;
+    }
+    // tally up the counts of each reference haplotype
     if (ref_hap_counts.find(curhap_long)==ref_hap_counts.end()){
+      // first time encountering this unique long haplotype string
       ref_hap_counts[curhap_long] = 0;
     }
     ++ref_hap_counts[curhap_long];
   }
-  cerr<<"Tallied up counts for each ref haplotype group. There are "<<ref_hap_counts.size()<<" groups.\n";
+  cerr<<"Tallied up counts for each ref long haplotype group. There are "<<ref_hap_counts.size()<<" groups.\n";
   // rank the template haplotypes by their frequencies
   multiset<hapobj_t,byHapCountDesc> sorted_guides_extended;
   for(std::tr1::unordered_map<string,int >::iterator it =
@@ -185,9 +186,11 @@ void GuidedMendelGPU::copy_ref_haplotypes(int left_marker){
     hapobj.hapcount = it->second;
     sorted_guides_extended.insert(hapobj);
   }
-  cerr<<"Sorted haplotype groups by frequency. There are "<<sorted_guides_extended.size()<<" sorted groups. \n";
+  cerr<<"Sorted long haplotype groups by frequency. There are "<<sorted_guides_extended.size()<<" sorted groups. \n";
   int extended_count = 0;
   cerr<<"There are "<<g_informative_markers<<" informative markers\n";
+  // generate a hash table of unique template haplotypes
+  std::tr1::unordered_map<string,set<string> > temp_hap_window;
   for(multiset<hapobj_t,byHapCountDesc>::iterator it = 
   sorted_guides_extended.begin();it!=sorted_guides_extended.end();it++){
     if (extended_count<g_max_extended_haplotypes){
@@ -214,6 +217,7 @@ void GuidedMendelGPU::copy_ref_haplotypes(int left_marker){
     hapobj.hapstr = it->first; 
     hapobj.hapcount = it->second.size();
     hapobj.extended_set = it->second;
+    hapobj.array_index = original_hap_order[it->first];
     sorted_guides.insert(hapobj);
   }
   //cerr<<"Ranked haplotype groups by frequency\n";
@@ -227,8 +231,16 @@ void GuidedMendelGPU::copy_ref_haplotypes(int left_marker){
   int compact_haplotypes = 0;
   extended_haplotypes = 0;
   int max_extended_haplotypes = g_max_haplotypes;
+  multiset<hapobj_t,byArrayIndex> original_order_guides;
   for(multiset<hapobj_t,byHapCountDesc>::iterator it = sorted_guides.begin();it!=sorted_guides.end();it++){
     if (compact_haplotypes<g_max_haplotypes){
+      hapobj_t hapobj = *it;
+      original_order_guides.insert(hapobj);
+      ++compact_haplotypes;
+    }
+  }
+  compact_haplotypes = 0;
+  for(multiset<hapobj_t,byArrayIndex>::iterator it = original_order_guides.begin();it!=original_order_guides.end();it++){
       hapobj_t hapobj = *it;
       //cerr<<"Copy into ref haplotype "<<compact_haplotypes<<":"<<endl;
       for(int j=0;j<g_informative_markers;++j){
@@ -240,7 +252,7 @@ void GuidedMendelGPU::copy_ref_haplotypes(int left_marker){
       hapstrarr[compact_haplotypes] = hapobj.hapstr;
       countarr[compact_haplotypes] = hapobj.hapcount;
       totalcounts+= hapobj.hapcount;
-      if (debug_haplotype) cerr<<"Considering "<<hapobj.hapstr<<" count: "<<hapobj.hapcount<<endl;
+      cerr<<"Considering "<<hapobj.hapstr<<" count: "<<hapobj.hapcount<<" with order "<<original_hap_order[hapobj.hapstr]<<endl;
       for(set<string>::iterator it=hapobj.extended_set.begin();
       it!=hapobj.extended_set.end();it++){
         if(debug_haplotype) cerr<<" extended: "<<*it<<endl;
@@ -248,7 +260,6 @@ void GuidedMendelGPU::copy_ref_haplotypes(int left_marker){
       }
       full_hap_window[hapobj.hapstr] = hapobj.extended_set;
       ++compact_haplotypes;
-    }
   }
   cerr<<"Full hap window size "<<full_hap_window.size()<<endl;
   // UPDATE TOTAL HAPLOTYPE SIZE

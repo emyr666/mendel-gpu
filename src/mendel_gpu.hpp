@@ -180,6 +180,12 @@ protected:
       return(p1.hapcount>p2.hapcount );
     }
   };
+  struct byArrayIndex{
+    bool operator()(const hapobj_t & p1,const hapobj_t & p2) const{
+      // sort in descending order
+      return(p1.array_index<p2.array_index);
+    }
+  };
   // class variables
   int g_informative_markers;
   int extended_markers;
@@ -303,6 +309,7 @@ protected:
   list<int> free_hap_indices;
   int * right_edge_dosage;
   int * center_dosage;
+  int * g_hap_perm;
   bool * window_polymorphisms;
 
   virtual void compute_penetrance()=0;
@@ -328,6 +335,7 @@ protected:
   cl::Buffer * buffer_subject_dosage;
   cl::Buffer * buffer_beyond_left_edge_dosage;
   cl::Buffer * buffer_center_snp;
+  cl::Buffer * buffer_hap_perm;
   cl::Buffer * buffer_center_dosage;
   cl::Buffer * buffer_right_edge_dosage;
   cl::Buffer * buffer_twin_hap_index;

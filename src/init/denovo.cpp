@@ -19,10 +19,16 @@ void DenovoMendelGPU::allocate_memory(){
   free_hap_indices.clear();
   occupied_hap_indices.push_back(0);
   free_hap_indices.push_back(1);
-  twin_hap_index[0] = 0;
-  twin_hap_index[1] = 1;
-
+  g_hap_perm = new int[g_max_haplotypes];
+  for(int i=0;i<g_max_haplotypes;++i){
+    g_hap_perm[i] = -1;
+  }
+  for(int i=0;i<2;++i){
+    twin_hap_index[i] = i;
+    g_hap_perm[i] = i;
+  }
   g_left_marker = 0;
+  g_prev_left_marker = g_left_marker;
   g_center_snp_start = 0;
   g_center_snp_end = 0;
   g_right_marker = 0;
@@ -38,6 +44,7 @@ DenovoMendelGPU::~DenovoMendelGPU(){
   delete[] beyond_left_edge_dosage;
   delete[] right_edge_dosage;
   delete[] center_dosage;
+  delete[] g_hap_perm;
   cerr<<"Exiting destructor denovo haplotyper\n";
 }
 
@@ -86,8 +93,16 @@ void DenovoMendelGPU::finalize_window(){
 }
 
 void DenovoMendelGPU::double_haplotypes(){
+  int half_max = g_max_haplotypes/2;
+  if (g_haplotypes>half_max) {
+    cerr<<"Not doubling haplotypes\n";
+    return;
+  }
   cerr<<"Entering double_haplotypes with "<<g_haplotypes<<" haplotypes\n";
   cerr<<"Prev and current left marker: "<<g_prev_left_marker<<","<<g_left_marker<<endl;
+  for(int i=0;i<g_max_haplotypes;++i){
+    g_hap_perm[i] = -1;
+  }
   int last_marker = g_markers-1;
   cerr<<"Last marker is "<<last_marker<<endl;
   list<int>::iterator it_occupied = occupied_hap_indices.begin();
@@ -96,10 +111,17 @@ void DenovoMendelGPU::double_haplotypes(){
   std::tr1::unordered_set<string> seen_haplo;
   g_haplotypes=0;
   for(int i=0;i<g_max_haplotypes;++i) g_active_haplotype[i] = 0;
+  int perm_index=0;
+  set<int> perm_set;
   while(it_occupied!=occupied_hap_indices.end()){
     int occupied_index = *it_occupied;
     int free_index = *it_free;
     //cerr<<"Current occupied/free index: "<<occupied_index<<","<<free_index<<endl;
+    g_hap_perm[perm_index++] = occupied_index; 
+    g_hap_perm[perm_index++] = free_index;
+    perm_set.insert(occupied_index);
+    perm_set.insert(free_index);
+      
     if (g_prev_left_marker!=g_left_marker){
       // shift hap alleles one over if we just slided
       for(int i=0;i<last_marker;++i){
@@ -136,15 +158,35 @@ void DenovoMendelGPU::double_haplotypes(){
     cerr<<" "<<g_active_haplotype[i];
   }
   cerr<<endl;
+  //cerr<<"Pre Hap permutation:";
+  for(int i=0;i<g_max_haplotypes;++i){
+    //cerr<<" "<<g_hap_perm[i];
+  }
+  //cerr<<endl;
+  for(int i=0;i<g_max_haplotypes;++i){
+    if (g_hap_perm[i]==-1){
+      for(int j=0;j<g_max_haplotypes;++j){
+        if (perm_set.find(j)==perm_set.end()){
+          g_hap_perm[i] = j;
+          perm_set.insert(j);
+          break;
+        }
+      }
+    }
+  }
+  cerr<<"Post Hap permutation:";
+  for(int i=0;i<g_max_haplotypes;++i){
+    cerr<<" "<<g_hap_perm[i];
+  }
+  cerr<<endl;
 }
 
 void DenovoMendelGPU::prune_haplotypes_(){
   cerr<<"Entering prune haplotypes\n";
   int half_max = g_max_haplotypes/2;
   int non_polymorphic_min = 2;
-  int threshold = 
-  (g_likelihood_mode==Config::LIKELIHOOD_MODE_READS && !polymorphic_window)?
-  non_polymorphic_min : half_max;
+  //int threshold = g_haplotypes;
+  int threshold = half_max;
   if (g_haplotypes>threshold){
     int marker_len = g_markers;
     multiset<hapobj_t,byHapFreqAsc> sorted_guides;
@@ -209,6 +251,15 @@ void DenovoMendelGPU::prune_haplotypes_(){
     //cerr<<"free index "<<free_index<<" now points to "<<occupied_index<<endl;
     it_occupied++;
     it_free++;
+  }
+  int j=0;
+  for(int i=0;i<g_max_haplotypes;++i){
+    if (g_active_haplotype[i]){
+      //g_hap_perm[i] = j;
+      //j+=2;
+    }else{
+      //g_hap_perm[i] = -1;
+    }
   }
   // normalize the frequencies
   float norm = 0;

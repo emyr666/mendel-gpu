@@ -18,6 +18,7 @@ void DenovoMendelGPU::init_opencl(){
     createBuffer<float>(CL_MEM_READ_WRITE,g_people,"buffer_subject_dosage",buffer_subject_dosage);
     createBuffer<float>(CL_MEM_READ_WRITE,4*g_people,"buffer_subject_posterior_prob",buffer_subject_posterior_prob);
     createBuffer<int>(CL_MEM_READ_WRITE,g_max_haplotypes,"buffer_center_dosage",buffer_center_dosage);
+    createBuffer<int>(CL_MEM_READ_WRITE,g_max_haplotypes,"buffer_hap_perm",buffer_hap_perm);
     createBuffer<int>(CL_MEM_READ_ONLY,g_max_haplotypes,"buffer_twin_hap_index",buffer_twin_hap_index);
     createBuffer<int>(CL_MEM_READ_ONLY,1,"buffer_prev_left_marker",buffer_prev_left_marker);
     createBuffer<int>(CL_MEM_READ_ONLY,g_max_haplotypes,"buffer_beyond_left_edge_dosage",buffer_beyond_left_edge_dosage);
@@ -46,8 +47,11 @@ void DenovoMendelGPU::init_opencl(){
     setArg(kernel_impute_genotype_denovo,arg,*buffer_active_haplotype,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,*buffer_center_dosage,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,*buffer_subject_haplotype_weight,"kernel_impute_genotype_denovo");
+    setArg(kernel_impute_genotype_denovo,arg,*buffer_hap_perm,"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,cl::__local(sizeof(int)*g_max_haplotypes),"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,cl::__local(sizeof(int)*g_max_haplotypes),"kernel_impute_genotype_denovo");
+    setArg(kernel_impute_genotype_denovo,arg,cl::__local(sizeof(int)*g_max_haplotypes),"kernel_impute_genotype_denovo");
+    setArg(kernel_impute_genotype_denovo,arg,cl::__local(sizeof(float)*g_max_haplotypes),"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,cl::__local(sizeof(float)*g_max_haplotypes),"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_impute_genotype_denovo");
     setArg(kernel_impute_genotype_denovo,arg,cl::__local(sizeof(float)*BLOCK_WIDTH),"kernel_impute_genotype_denovo");
@@ -68,6 +72,7 @@ void DenovoMendelGPU::free_opencl(){
     delete buffer_prev_left_marker; 
     delete buffer_twin_hap_index; 
     delete buffer_center_dosage; 
+    delete buffer_hap_perm;
     delete buffer_subject_posterior_prob; 
     delete buffer_subject_dosage; 
     delete buffer_subject_genotype; 

@@ -73,6 +73,7 @@ void MendelGPU::allocate_memory(){
   // load data sets
   load_datasets();
   // allocation begins here
+  g_haplotypes = 0;
   g_haplotype = new int[g_max_haplotypes*g_max_window];  
   g_frequency = new float[g_max_haplotypes];
   for(int i=0;i<g_max_haplotypes;++i) g_frequency[i] = 0;

@@ -3,7 +3,7 @@
 faidx='simref2.fasta.fai'
 mergedsam='merged.sam'
 rm -f $faidx $mergedsam
-subjects=100
+subjects=2
 tar -xzvf variants3.tar.gz
 for((subject=0;subject<$subjects;++subject))
 do

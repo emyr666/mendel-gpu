@@ -26,7 +26,7 @@ void ReadPenetrance::populate_read_matrices(){
   double start = clock();
   cerr<<"Extracting reads at left marker "<<mendelgpu->g_left_marker<<" with region length "<<mendelgpu->g_markers<<"\n";
   for(int subject=0;subject<mendelgpu->g_people;++subject){
-    bool debug = mendelgpu->g_markers<0 && (subject==10||subject==11);
+    bool debug = (subject==TEST_SUBJECT);
     parser->extract_region(subject,mendelgpu->g_left_marker,mendelgpu->g_markers,true);
     if(debug) cerr<<"Printing subject "<<subject<<"\n";
     if(debug)parser->print_data();
@@ -34,7 +34,7 @@ void ReadPenetrance::populate_read_matrices(){
     // get total depth
     for(uint matrow=0;matrow<parser->matrix_rows;++matrow){
       int offset = parser->offset[matrow];
-      if(debug) cerr<<"Working on main read "<<matrow<<" with offset "<<offset<<endl;
+      //if(debug) cerr<<"Working on main read "<<matrow<<" with offset "<<offset<<endl;
       for(uint j=0;j<mendelgpu->g_max_window;++j){
         read_alleles_mat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+j] = parser->matrix_alleles[matrow*MAX_MATRIX_WIDTH+j];
         //read_match_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+j] = 0;
@@ -58,7 +58,7 @@ void ReadPenetrance::populate_read_matrices(){
       for(uint baseindex=0;baseindex<parser->read_len[matrow];
         ++baseindex){
         if (offset+baseindex<mendelgpu->g_max_window){
-          if (debug)cerr<<"POPULATE for row "<<matrow<<" col "<<offset+baseindex<<" match,mismatch: "<<read_match_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex]<<","<<read_mismatch_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex]<<endl;
+          //if (debug)cerr<<"POPULATE for row "<<matrow<<" col "<<offset+baseindex<<" match,mismatch: "<<read_match_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex]<<","<<read_mismatch_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex]<<endl;
         }
       }
     } 
@@ -161,7 +161,7 @@ void ReadPenetrance::process_read_matrices(){
           } // active hap condition
         } // second hap loop
       }// first hap loop
-      if(debug_penmat && (subject==10 || subject==11)) {
+      if(debug_penmat && (subject==debug_penmat_person)) {
         cerr<<"SUBJECT "<<subject<<endl;
         for(int j=0;j<mendelgpu->g_max_haplotypes;++j){
           if (mendelgpu->g_active_haplotype[j]){
@@ -178,7 +178,7 @@ void ReadPenetrance::process_read_matrices(){
       }
     }
     cerr<<"Exiting compute penetrance in "<<(clock()-start)/CLOCKS_PER_SEC<<"\n";
-    //if(debug_penmat) exit(0);
+    if(debug_penmat) exit(0);
   }
   return;
 }
