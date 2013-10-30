@@ -6,10 +6,10 @@ compile: $(OBJS)
 read_parser: read_parser.o
 	$(LINKER) -o read_penetrance $(LINK_FLAGS) $< ../../lib/libbam.a
 
-read_parser.o: read_parser.cpp ../read_utilities.hpp
+read_parser.o: read_parser.cpp ../read_utilities.hpp ../cl_constants.h
 	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
-read_pen.o: read_pen.cpp ../mendel_gpu.hpp
+read_pen.o: read_pen.cpp ../mendel_gpu.hpp ../cl_constants.h
 	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
 read_pen_opencl.o: read_pen_opencl.cpp ../cl_templates.hpp ../cl_constants.h

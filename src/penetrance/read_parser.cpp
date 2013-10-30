@@ -11,7 +11,7 @@ float ReadParser::max_log_phred = log(1.-ReadParser::EPSILON);
 float ReadParser::logprob_match_lookup[100];
 float ReadParser::logprob_mismatch_lookup[100];
 int test_subject = TEST_SUBJECT;
-const char * test_subject_str="TEST_SUBJECT";
+string test_subject_str=TEST_SUBJECT_STR;
 
 int ReadParser::hex2int(string input){
   int val;
@@ -118,132 +118,138 @@ void ReadParser::add_to_pileup_maps(pileup_key_t & key,pileup_val_t & val){
 // callback for bam_plbuf_init()
 int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pileup1_t *pl, void *data)
 {
+  // query pos is 0 based, while SNP list is 1 based
   ReadParser *parser = (ReadParser *)data;
   tmpstruct_t *tmp = parser->tmp;
   pileup_key_t plkey;
   plkey.subject = tmp->in->header->target_name[tid];
-  plkey.querypos = querypos+1; 
+  uint genomic_pos = querypos + 1;
+  plkey.querypos = genomic_pos;
   bool debug =   plkey.subject.compare(test_subject_str)==0;
   if ((int)querypos >= tmp->beg && (int)querypos < tmp->end ){
-    if(debug)cerr<<"Pileup function: Read found!\n";
+    if(debug)cerr<<"Pileup function: Read found: querypos,beg,end: "<<querypos<<","<<tmp->beg<<","<<tmp->end<<"!\n";
     pileup_val_t plval;
     plval.total_reads = n;
-    if (debug) cerr<<"Subject: "<<tmp->in->header->target_name[tid]<<" pos: "<<querypos+1<<" total reads: "<< n<<endl;
+    if (debug) cerr<<"Subject: "<<tmp->in->header->target_name[tid]<<" pos: "<<genomic_pos<<" total reads: "<< n<<endl;
     if (n>MAX_SUPERREADS){
-      cerr<<"A total of "<<n<<" super reads were encountered at this position "<<querypos+1<<", exceeding the max allocation of "<<MAX_SUPERREADS<<". Consider increasing the MAX_SUPERREADS value.\n";
+      cerr<<"A total of "<<n<<" super reads were encountered at this position "<<genomic_pos<<", exceeding the max allocation of "<<MAX_SUPERREADS<<". Consider increasing the MAX_SUPERREADS value.\n";
       throw "Read parser error";
      
     }
     set<int> position_set;
     for(int i=0;i<n;++i){
-      uint genomic_pos = querypos + 1;
-      if (debug) cerr<<" Processing read: "<<i<<endl;
+      uint current_genomic_pos = genomic_pos;
       const bam1_t * bam = pl[i].b;
-      char * name = bam1_qname(bam); int pos = bam->core.pos+1;
-      //plval.read_names[i] = name;
-      uint32_t* cigar = bam1_cigar(bam);
-      int cigar_len = bam_cigar2qlen(&(bam->core),cigar);
-      if (debug) cerr<<"  Name "<<name<<" at pos "<<pos<<" with cigar len "<<cigar_len<<endl;
-      uint8_t * x1 = bam_aux_get(bam,"x1");
-      string mesg_x1,mesg_y1;
-      if (x1){
-        mesg_x1 = bam_aux2Z(x1);
-        int mesg_len = mesg_x1.length();
-        plval.depths[i] = mesg_len/2;
-        if (plval.depths[i]>MAX_SUBREADS){
-//        if (parser->depth[parser->matrix_rows]>MAX_SUBREADS){
-          cerr<<"A read depth of "<<plval.depths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_SUBREADS<<". Consider increasing the MAX_SUBREADS value.\n";
-          throw "Read parser error";
+      char * name = bam1_qname(bam); 
+      int bam_pos = bam->core.pos;
+      if (bam_pos+1!=genomic_pos){
+        if (debug) cerr<<"  Name "<<name<<" at BAM pos "<<bam_pos+1<<" skipped as it would misalign with matrix\n";
+      }else{
+        //plval.read_names[i] = name;
+        uint32_t* cigar = bam1_cigar(bam);
+        int cigar_len = bam_cigar2qlen(&(bam->core),cigar);
+        if (debug) cerr<<"  Name "<<name<<" at BAM pos "<<bam_pos+1<<" will be processed\n";
+        uint8_t * x1 = bam_aux_get(bam,"x1");
+        string mesg_x1,mesg_y1;
+        if (x1){
+          mesg_x1 = bam_aux2Z(x1);
+          int mesg_len = mesg_x1.length();
+          plval.depths[i] = mesg_len/2;
+          if (plval.depths[i]>MAX_SUBREADS){
+  //        if (parser->depth[parser->matrix_rows]>MAX_SUBREADS){
+            cerr<<"A read depth of "<<plval.depths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_SUBREADS<<". Consider increasing the MAX_SUBREADS value.\n";
+            throw "Read parser error";
+          }
+          //parser->depth[parser->matrix_rows] = mesg_len/2;
+          //for(int i=0;i<mesg_len/2;){
+            //string element = mesg_x1.substr(i*2,2);
+            //parser->map_quality[parser->matrix_rows][i] = ReadParser::hex2int(element);
+            //++i;
+            //if (i==MAX_SUPERREADS) break;
+          //}
+          //plval.mapqual_str[i] = mesg_x1;
         }
-        //parser->depth[parser->matrix_rows] = mesg_len/2;
-        //for(int i=0;i<mesg_len/2;){
-          //string element = mesg_x1.substr(i*2,2);
-          //parser->map_quality[parser->matrix_rows][i] = ReadParser::hex2int(element);
-          //++i;
-          //if (i==MAX_SUPERREADS) break;
-        //}
-        //plval.mapqual_str[i] = mesg_x1;
-      }
-      uint8_t * y1 = bam_aux_get(bam,"y1");
-      if (y1){
-        mesg_y1 = bam_aux2Z(y1);
-        //plval.basequal_str[i] = mesg_y1;
-        int mesg_len = mesg_y1.length();
-        plval.lengths[i] = mesg_len/(2*plval.depths[i]);
-        if (plval.lengths[i]>MAX_MATRIX_WIDTH){
-//        if (parser->depth[parser->matrix_rows]>MAX_SUBREADS){
-          cerr<<"A read length of "<<plval.lengths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_MATRIX_WIDTH<<". Consider increasing the MAX_MATRIX_WIDTH value.\n";
-          throw "Read parser error";
-        }
-        ////parser->read_len[parser->matrix_rows] = mesg_len/(2*parser->depth[parser->matrix_rows]);
-        for(int k=0;k<plval.lengths[i];++k){
-          plval.logmatch_qualities[i*MAX_MATRIX_WIDTH+k] = 0;
-          plval.logmismatch_qualities[i*MAX_MATRIX_WIDTH+k] = 0;
-        }
-        int stroffset = 0;
-        for(int j=0;j<plval.depths[i];++j){
-        //for(int i=0;i<parser->depth[parser->matrix_rows];++i){
+        uint8_t * y1 = bam_aux_get(bam,"y1");
+        if (y1){
+          mesg_y1 = bam_aux2Z(y1);
+          //plval.basequal_str[i] = mesg_y1;
+          int mesg_len = mesg_y1.length();
+          plval.lengths[i] = mesg_len/(2*plval.depths[i]);
+          if (plval.lengths[i]>MAX_MATRIX_WIDTH){
+  //        if (parser->depth[parser->matrix_rows]>MAX_SUBREADS){
+            cerr<<"A read length of "<<plval.lengths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_MATRIX_WIDTH<<". Consider increasing the MAX_MATRIX_WIDTH value.\n";
+            throw "Read parser error";
+          }
+          ////parser->read_len[parser->matrix_rows] = mesg_len/(2*parser->depth[parser->matrix_rows]);
           for(int k=0;k<plval.lengths[i];++k){
-        //  for(int j=0;j<parser->read_len[parser->matrix_rows];++j){
-            string element = mesg_y1.substr(stroffset,2);
-        //    if (j<parser->MAX_MATRIX_WIDTH){
-              //plval.basequalities[i*MAX_SUBREADS*MAX_MATRIX_WIDTH+j*MAX_MATRIX_WIDTH+k] = ReadParser::hex2int(element);
-              //if (debug) cerr<<"Setting base quality at subread "<<j<<" and col "<<k<<" to "<<plval.basequalities[i*MAX_SUBREADS*MAX_MATRIX_WIDTH+j*MAX_MATRIX_WIDTH+k]<<endl;
-              plval.logmatch_qualities[i*MAX_MATRIX_WIDTH+k] += logprob_match_lookup[hex2int(element)];
-              plval.logmismatch_qualities[i*MAX_MATRIX_WIDTH+k] += logprob_mismatch_lookup[hex2int(element)];
-        //      parser->base_quality[parser->matrix_rows][i][j] = ReadParser::hex2int(element);
-        //    }
-            stroffset += 2;
+            plval.logmatch_qualities[i*MAX_MATRIX_WIDTH+k] = 0;
+            plval.logmismatch_qualities[i*MAX_MATRIX_WIDTH+k] = 0;
+          }
+          int stroffset = 0;
+          for(int j=0;j<plval.depths[i];++j){
+          //for(int i=0;i<parser->depth[parser->matrix_rows];++i){
+            for(int k=0;k<plval.lengths[i];++k){
+          //  for(int j=0;j<parser->read_len[parser->matrix_rows];++j){
+              string element = mesg_y1.substr(stroffset,2);
+          //    if (j<parser->MAX_MATRIX_WIDTH){
+                //plval.basequalities[i*MAX_SUBREADS*MAX_MATRIX_WIDTH+j*MAX_MATRIX_WIDTH+k] = ReadParser::hex2int(element);
+                //if (debug) cerr<<"Setting base quality at subread "<<j<<" and col "<<k<<" to "<<plval.basequalities[i*MAX_SUBREADS*MAX_MATRIX_WIDTH+j*MAX_MATRIX_WIDTH+k]<<endl;
+                plval.logmatch_qualities[i*MAX_MATRIX_WIDTH+k] += logprob_match_lookup[hex2int(element)];
+                plval.logmismatch_qualities[i*MAX_MATRIX_WIDTH+k] += logprob_mismatch_lookup[hex2int(element)];
+          //      parser->base_quality[parser->matrix_rows][i][j] = ReadParser::hex2int(element);
+          //    }
+              stroffset += 2;
+            }
           }
         }
-      }
-      string seq_str(bam->core.l_qseq,' ');
-      bool debug_seq = false;
-      uint8_t * seq = bam1_seq(bam);
-      if (debug_seq) cerr<<"  Query sequence"; 
-      int j;
-      for(j=0;j<bam->core.l_qseq;++j){
-        int v = bam1_seqi(seq,j);
-        seq_str[j] =  bam_nt16_rev_table[v];
-        if (debug_seq)cerr<<" "<<j<<":"<<seq_str[j];
-      }
-      //plval.sequence_str[i] = seq_str;
-      if (debug_seq) cerr<<endl;
-      //uint offset = tmp->cursor;
-      uint cursor = 0;
-      //plval.total_cigars[i] =bam->core.n_cigar; 
-      --genomic_pos;
-      for(int k=0;k<bam->core.n_cigar;++k){
-        int cop = cigar[k] & BAM_CIGAR_MASK;
-        int c1 = cigar[k] >> BAM_CIGAR_SHIFT;
-        //plval.cigar_ops[i][k] = cop;
-        //plval.cigar_len[i][k] = c1;
-        if (debug) cerr<<"  Current cigar len "<<c1<<" of type ";
-        if (cop==BAM_CMATCH ){
-          string read_substr(seq_str,cursor,1);
-          //if (offset+cursor<MAX_MATRIX_WIDTH){
-            if (read_substr.compare("=")==0){
-              if (debug) cerr<<" MATCH\n";
-                plval.alleles[i*MAX_MATRIX_WIDTH + cursor] = 0;
-        //       parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+offset+cursor] = 0;
-            }else if (read_substr.compare("N")==0){
-              if (debug) cerr<<" MISMATCH\n";
-                plval.alleles[i*MAX_MATRIX_WIDTH+cursor] = 1;
-        //      parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+offset+cursor] = 1;
-            }else{
-              cerr<<"Unknown read_substr is "<<read_substr<<endl;
-              exit(0);
-            }
-            if (debug)  cerr<<"  Inserted "<< plval.alleles[i*MAX_MATRIX_WIDTH+cursor]<<" into row "<<i<<" and col "<<cursor<<endl;
-          //}
-          genomic_pos+=c1;
-          position_set.insert(genomic_pos);
-        }else if (cop==BAM_CPAD){
-          if (debug) cerr<<"  CPAD\n";
-          genomic_pos+=c1;
-          ++cursor;
+        string seq_str(bam->core.l_qseq,' ');
+        bool debug_seq = false;
+        uint8_t * seq = bam1_seq(bam);
+        if (debug_seq) cerr<<"  Query sequence"; 
+        int j;
+        for(j=0;j<bam->core.l_qseq;++j){
+          int v = bam1_seqi(seq,j);
+          seq_str[j] =  bam_nt16_rev_table[v];
+          if (debug_seq)cerr<<" "<<j<<":"<<seq_str[j];
         }
-        if (debug) cerr<<"  Genomic position is now "<<genomic_pos<<endl;
+        //plval.sequence_str[i] = seq_str;
+        if (debug_seq) cerr<<endl;
+        //uint offset = tmp->cursor;
+        uint cursor = 0;
+        //plval.total_cigars[i] =bam->core.n_cigar; 
+        current_genomic_pos = bam_pos ;
+        for(int k=0;k<bam->core.n_cigar;++k){
+          int cop = cigar[k] & BAM_CIGAR_MASK;
+          int c1 = cigar[k] >> BAM_CIGAR_SHIFT;
+          //plval.cigar_ops[i][k] = cop;
+          //plval.cigar_len[i][k] = c1;
+          if (debug) cerr<<"  Current cigar len "<<c1<<" of type ";
+          if (cop==BAM_CMATCH ){
+            string read_substr(seq_str,cursor,1);
+            //if (offset+cursor<MAX_MATRIX_WIDTH){
+              if (read_substr.compare("=")==0){
+                if (debug) cerr<<" MATCH\n";
+                  plval.alleles[i*MAX_MATRIX_WIDTH + cursor] = 0;
+          //       parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+offset+cursor] = 0;
+              }else if (read_substr.compare("N")==0){
+                if (debug) cerr<<" MISMATCH\n";
+                  plval.alleles[i*MAX_MATRIX_WIDTH+cursor] = 1;
+          //      parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+offset+cursor] = 1;
+              }else{
+                cerr<<"Unknown read_substr is "<<read_substr<<endl;
+                exit(0);
+              }
+              if (debug)  cerr<<"  Inserted "<< plval.alleles[i*MAX_MATRIX_WIDTH+cursor]<<" into row "<<i<<" and col "<<cursor<<endl;
+            //}
+            current_genomic_pos+=c1;
+            position_set.insert(current_genomic_pos);
+          }else if (cop==BAM_CPAD){
+            if (debug) cerr<<"  CPAD\n";
+            current_genomic_pos+=c1;
+            ++cursor;
+          }
+          if (debug) cerr<<"  Genomic position is now "<<current_genomic_pos<<endl;
+        }
       }
       if(debug)cerr<<"parsed cigars\n"; 
       //parser->offset[parser->matrix_rows] = offset;
@@ -258,7 +264,11 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
     int p = 0;    
     for(set<int>::iterator it = position_set.begin();it!=position_set.end();
     it++){
+      int pos = *it;
       if (debug) cerr<<"Found position: "<<*it<<endl;
+      if (debug && parser->position_set.find(pos)==parser->position_set.end()){
+        throw "This position is invalid";
+      }
       plval.positions[p++] = *it;
     }
     process_region(plkey,plval,parser);
@@ -568,8 +578,27 @@ void ReadParser::extract_region(int subject,int offset,int snps,bool populate_ma
         //pileup_map.erase(it);
       //}
       if (partial_pileup_map.lower_bound(key)!=partial_pileup_map.upper_bound(key)){
-        if(subject==test_subject)cerr<<"For overlapping pileups deleting in cache subject "<<key.subject<<" and pos "<<key.querypos<<endl;
+        if (subject==test_subject) cerr<<"For overlapping pileups deleting in cache subject "<<key.subject<<" and pos "<<key.querypos<<endl;
         partial_pileup_map.erase(partial_pileup_map.lower_bound(key),partial_pileup_map.upper_bound(key));
+      }
+
+      // sanity check
+      if (snpindex==-10){
+        if (subject==test_subject) cerr<<"At "<<snpindex<<" SANITY CHECK for subject "<<subject<<endl;
+        for(int i=0;i<snpindex;++i){
+          pileup_key_t testkey = key;
+          testkey.querypos = position_vec[i];
+          if (pileup_map.find(testkey)!=pileup_map.end()){
+            if (subject==test_subject) cerr<<"Existing pileup found at snp, position "<<snpindex<<","<<position_vec[i]<<endl;
+          }
+          if (partial_pileup_map.find(testkey)!=partial_pileup_map.end()){
+            if (subject==test_subject) cerr<<"Using find, Existing partial pileup found at snp, position "<<snpindex<<","<<position_vec[i]<<endl;
+          }
+          if (partial_pileup_map.lower_bound(testkey)!=partial_pileup_map.upper_bound(key)){
+            pileup_key_t found_key = partial_pileup_map.lower_bound(testkey)->first;
+            if (subject==test_subject) cerr<<"Using lowerupper bound, Existing partial pileup found at snp, position "<<i<<","<<position_vec[i]<<" key subject,querypos: "<<found_key.subject<<","<<found_key.querypos<<endl;
+          }
+        }
       }
     }
   }
