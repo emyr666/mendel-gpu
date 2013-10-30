@@ -482,6 +482,7 @@ void ReadParser::make_partial_pileup(int lastpos,int currentpos,int offset,pileu
 }
 
 void ReadParser::extract_region(int subject,int offset,int snps,bool populate_matrix){
+  bool debug = subject==test_subject;
   ostringstream oss_subject;
   oss_subject<<subject;
   string subject_str = oss_subject.str();
@@ -526,6 +527,8 @@ void ReadParser::extract_region(int subject,int offset,int snps,bool populate_ma
       pileup_val_t foundval = it->second;
       process_region(foundkey,foundval,this);
       lastfound_snpindex = snpindex;
+    }else if(untyped_pileup_set.find(key)!=untyped_pileup_set.end()){
+      if(debug) cerr<<"Was not found in samtools, will not attempt again\n";
     }else{
       //if memory fetch fails fetch from disk
       //if (untyped_pileup_set.find(key)==untyped_pileup_set.end()){
@@ -535,7 +538,7 @@ void ReadParser::extract_region(int subject,int offset,int snps,bool populate_ma
       //int ref;
       // extract the region next from BAM file
       int ref;
-      if(debug)cerr<<"Cache miss, samtool querying region: "<<region<<endl;
+      if(subject==test_subject)cerr<<"Cache miss, samtool querying region: "<<region<<endl;
       bam_parse_region(tmp->in->header, region, &ref,
         &tmp->beg, &tmp->end); // parse the region
       if (ref < 0) {
@@ -549,7 +552,8 @@ void ReadParser::extract_region(int subject,int offset,int snps,bool populate_ma
       bam_plbuf_destroy(buf);
       //if (use_cache){
       if(pileup_map.find(key)==pileup_map.end()){
-        // no pileups were found for snpindex
+        if(subject==test_subject)cerr<<"No pileups were loaded for subject "<<key.subject<<", position "<<key.querypos<<".\n";
+        untyped_pileup_set.insert(key);
       }else{
         // pileups were found for snpindex
         pileups_found = true;
@@ -571,6 +575,10 @@ void ReadParser::extract_region(int subject,int offset,int snps,bool populate_ma
       if (pileup_map.find(key)!=pileup_map.end()){
         if(subject==test_subject)cerr<<"For internal pileups deleting in cache subject "<<key.subject<<" and pos "<<key.querypos<<endl;
         pileup_map.erase(pileup_map.find(key));
+      }
+      if (untyped_pileup_set.find(key)!=untyped_pileup_set.end()){
+        if(subject==test_subject)cerr<<"For untyped pileups deleting in cache subject "<<key.subject<<" and pos "<<key.querypos<<endl;
+        untyped_pileup_set.erase(untyped_pileup_set.find(key));
       }
       //pileup_map_t::iterator it = pileup_map.find(key);
       //if (it!=pileup_map.end()){

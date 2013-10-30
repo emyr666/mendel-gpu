@@ -120,7 +120,7 @@ private:
   //vector<int> positions;
   set<int> position_set;
   vector<int> position_vec;
-  //pileup_set_t untyped_pileup_set;
+  pileup_set_t untyped_pileup_set;
   pileup_map_t pileup_map;
   pileup_multimap_t partial_pileup_map;
   int last_left_marker;
