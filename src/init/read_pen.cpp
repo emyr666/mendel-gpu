@@ -6,12 +6,19 @@
 
 ReadPenetrance::~ReadPenetrance(){
   cerr<<"Entering destructor Read penetrance\n";
+  cerr<<"The maximum non-zero elements found was "<<max_nonzero_elements<<endl;
   delete parser;
   cerr<<"Parser deleted\n";
   delete[] read_alleles_mat;
   delete[] read_match_logmat;
   delete[] read_mismatch_logmat;
   delete[] mat_rows_by_subject;
+  delete[] read_alleles_vec;
+  delete[] read_match_logvec;
+  delete[] read_mismatch_logvec;
+  delete[] vector_offsets;
+  delete[] haplotype_offsets;
+  delete[] read_lengths;
   cerr<<"Exiting destructor Read penetrance\n";
 
 }
@@ -24,6 +31,7 @@ ReadPenetrance::ReadPenetrance(MendelGPU * mendelgpu){
   }
   cerr<<"Initializing variables for Read Penetrance\n";
   log_half = log(.5);
+  max_nonzero_elements = 0;
 
   Config * config = mendelgpu->config;
   string variants = config->bimfile;
@@ -40,4 +48,11 @@ ReadPenetrance::ReadPenetrance(MendelGPU * mendelgpu){
   read_match_logmat = new float[mendelgpu->g_people*read_compact_matrix_size];
   read_mismatch_logmat = new float[mendelgpu->g_people*read_compact_matrix_size];
   mat_rows_by_subject = new int[mendelgpu->g_people];
+
+  read_alleles_vec = new int[mendelgpu->g_people*read_compact_matrix_size];
+  read_match_logvec = new float[mendelgpu->g_people*read_compact_matrix_size];
+  read_mismatch_logvec = new float[mendelgpu->g_people*read_compact_matrix_size];
+  vector_offsets = new int[mendelgpu->g_people*compact_rows];
+  haplotype_offsets = new int[mendelgpu->g_people*compact_rows];
+  read_lengths = new int[mendelgpu->g_people*compact_rows];
 }

@@ -20,7 +20,7 @@ using namespace std;
 class ReadParser;
 
 struct read_constants_t{
-  static const uint MAX_MATRIX_WIDTH=20;
+  static const uint MAX_MATRIX_WIDTH = 40;
   static const uint MAX_SUPERREADS = 50;
   static const uint MAX_SUBREADS = 30;
   static const uint MAX_MATRIX_HEIGHT=MAX_SUPERREADS*MAX_SUBREADS;
@@ -48,20 +48,18 @@ struct pileup_val_t:public read_constants_t{
   ~pileup_val_t();
   int total_reads;
   int total_positions;
-  //string read_names[MAX_SUPERREADS]; 
   int positions[MAX_MATRIX_WIDTH];
   int depths[MAX_SUPERREADS];
   int lengths[MAX_SUPERREADS];
-  int alleles[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
-  float logmatch_qualities[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
-  float logmismatch_qualities[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
-  //int basequalities[MAX_SUPERREADS * MAX_SUBREADS * MAX_MATRIX_WIDTH];
-  //string  mapqual_str[MAX_SUPERREADS];
-  //string  basequal_str[MAX_SUPERREADS];
-  //string sequence_str[MAX_SUPERREADS];
-  //int  total_cigars[MAX_SUPERREADS];
-  //int  cigar_ops[MAX_SUPERREADS][MAX_MATRIX_WIDTH];
-  //int  cigar_len[MAX_SUPERREADS][MAX_MATRIX_WIDTH];
+  //int alleles[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
+  //float logmatch_qualities[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
+  //float logmismatch_qualities[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
+
+  // experimental way of storing sparse matrix
+  int alleles_compact[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
+  float logmatch_qualities_compact[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
+  float logmismatch_qualities_compact[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
+  int offsets[MAX_SUPERREADS];
 };
 
 struct by_subject_pos{
@@ -127,6 +125,7 @@ private:
   bool pileups_found;
   int cursor;
   bam_index_t *idx;
+  bam_plbuf_t *buf;
   const char * bam_filename;
   //const char * variants_file;
   void make_partial_pileup(int lastfound_position,int current_position,int offset,pileup_key_t & key, pileup_val_t & val);
@@ -182,10 +181,19 @@ protected:
   int full_rows;
   int read_compact_matrix_size;
   int read_full_matrix_size;
+  int * mat_rows_by_subject;
   int * read_alleles_mat; // has superreads rows
   float * read_match_logmat; // has superreads*subreads rows
   float * read_mismatch_logmat;// has superreads*subreads rows
-  int * mat_rows_by_subject;
+
+  int * read_alleles_vec; 
+  float * read_match_logvec; 
+  float * read_mismatch_logvec;
+  int * vector_offsets;
+  int * read_lengths;
+  int * haplotype_offsets;
+
 private:
   MendelGPU * mendelgpu;
+  int max_nonzero_elements;
 };

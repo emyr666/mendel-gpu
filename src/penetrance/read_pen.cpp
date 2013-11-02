@@ -32,24 +32,39 @@ void ReadPenetrance::populate_read_matrices(){
     if(debug)parser->print_data();
     // GPU friendly implementation
     // get total depth
+    int non_zero = 0;
+    int vec_index = 0;
     for(uint matrow=0;matrow<parser->matrix_rows;++matrow){
       int offset = parser->offset[matrow];
       //if(debug) cerr<<"Working on main read "<<matrow<<" with offset "<<offset<<endl;
+      vector_offsets[subject*compact_rows+matrow] = vec_index;
+      haplotype_offsets[subject*compact_rows+matrow] = 0;
+      if(debug) cerr<<"vector offset at row "<<matrow<<" is "<<vec_index<<endl;
+      int k=0;
+      bool hap_found = false;
       for(uint j=0;j<mendelgpu->g_max_window;++j){
         read_alleles_mat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+j] = parser->matrix_alleles[matrow*MAX_MATRIX_WIDTH+j];
-        //read_match_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+j] = 0;
-        //read_mismatch_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+j] = 0;
+        if (parser->matrix_alleles[matrow*MAX_MATRIX_WIDTH+j]!=9) {
+          read_alleles_vec[subject*read_compact_matrix_size+vec_index] =  parser->matrix_alleles[matrow*MAX_MATRIX_WIDTH+j];
+          read_match_logvec[subject*read_compact_matrix_size+vec_index] =  parser->logmatch_quality[matrow][k];
+          read_mismatch_logvec[subject*read_compact_matrix_size+vec_index] =  parser->logmismatch_quality[matrow][k];
+          if(debug) cerr<< "at vecindex "<<vec_index<<" alleles,match,mismatch are "<<read_alleles_vec[subject*read_compact_matrix_size+vec_index]<<","<<read_match_logvec[subject*read_compact_matrix_size+vec_index]<<","<<read_mismatch_logvec[subject*read_compact_matrix_size+vec_index]<<endl;
+          ++vec_index;
+          ++k;
+          ++non_zero;
+          hap_found = true;
+        }else{
+          if(!hap_found) ++haplotype_offsets[subject*compact_rows+matrow];
+        }
       }
+      read_lengths[subject*compact_rows+matrow] = vec_index-vector_offsets[subject*compact_rows+matrow];
+      if(debug) cerr<<"Hap offset at row "<<matrow<<" is "<<haplotype_offsets[subject*compact_rows+matrow]<<endl;
+      if(debug) cerr<<"Read length at row "<<matrow<<" is "<<read_lengths[subject*compact_rows+matrow]<<endl;
       // first get the depth of main read
       int depth = parser->depth[matrow];
-      //for(uint readindex=0;readindex<depth;++readindex){
         for(uint baseindex=0;baseindex<parser->read_len[matrow];
         ++baseindex){
           if (offset+baseindex<mendelgpu->g_max_window){
-            //int phredscore = parser->base_quality[matrow][readindex][baseindex];
-            //if(debug) cerr<<"Phred score is "<<phredscore<<endl;
-            //read_match_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex] += parser->logprob_match_lookup[phredscore];
-            //read_mismatch_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex] += parser->logprob_mismatch_lookup[phredscore];
             read_match_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex] = parser->logmatch_quality[matrow][baseindex];
             read_mismatch_logmat[subject*read_compact_matrix_size+matrow*mendelgpu->g_max_window+offset+baseindex] = parser->logmismatch_quality[matrow][baseindex];
           }
@@ -62,6 +77,7 @@ void ReadPenetrance::populate_read_matrices(){
         }
       }
     } 
+    if (non_zero>max_nonzero_elements) max_nonzero_elements = non_zero;
     mat_rows_by_subject[subject] = parser->matrix_rows;
   }
   parser->finalize(mendelgpu->g_left_marker);
@@ -89,11 +105,11 @@ void ReadPenetrance::process_read_matrices(){
     process_read_matrices_opencl();
   }
   if (mendelgpu->run_cpu){
-    bool debug_penmat = false;
-    int debug_penmat_person = 11;
+    bool debug_penmat = true;
+    int debug_penmat_person = TEST_SUBJECT;
     double start = clock();
     for(int subject=0;subject<mendelgpu->g_people;++subject){
-      bool debug = subject==-10||subject==-11;
+      bool debug = subject==TEST_SUBJECT;
       float max_log_pen = -1e10;
       for(int hap1=0;hap1<mendelgpu->g_max_haplotypes;++hap1){
         for(int hap2=hap1;hap2<mendelgpu->g_max_haplotypes;++hap2){
@@ -113,28 +129,52 @@ void ReadPenetrance::process_read_matrices(){
             //explore the entire matrix 
             float log_like = 0;
             for(int row=0;row<total_depth;++row){
-              float hap1_logprob[mendelgpu->g_max_window];
-              float hap2_logprob[mendelgpu->g_max_window];
-              for(int col=0;col<total_width;++col){
-                int allele = read_alleles_mat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col] ;
-                //if (debug) cerr<<"Allele is "<<allele<<endl;
-                if(allele!=9 && col<mendelgpu->g_markers){
-                  hap1_logprob[col] = mendelgpu->g_haplotype[hap1*mendelgpu->g_max_window+col]==allele?
-                  read_match_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col]:
-                  read_mismatch_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col];
-                  hap2_logprob[col] = mendelgpu->g_haplotype[hap2*mendelgpu->g_max_window+col]==allele?
-                  read_match_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col]:
-                  read_mismatch_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col];
-                  if (debug)cerr<<"for row,col "<<row<<","<<col<<" GOT HERE with vals "<<hap1_logprob[col]<<","<<hap2_logprob[col]<<"\n";
-               
-                }else{
-                  hap1_logprob[col] = 0;
-                  hap2_logprob[col] = 0;
+              //float hap1_logprob[mendelgpu->g_max_window];
+              //float hap2_logprob[mendelgpu->g_max_window];
+              //for(int col=0;col<total_width;++col){
+              //  int allele = read_alleles_mat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col] ;
+              //  //if (debug) cerr<<"Allele is "<<allele<<endl;
+              //  if(allele!=9 && col<mendelgpu->g_markers){
+              //    hap1_logprob[col] = mendelgpu->g_haplotype[hap1*mendelgpu->g_max_window+col]==allele?
+              //    read_match_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col]:
+              //    read_mismatch_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col];
+              //    hap2_logprob[col] = mendelgpu->g_haplotype[hap2*mendelgpu->g_max_window+col]==allele?
+              //    read_match_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col]:
+              //    read_mismatch_logmat[subject*read_compact_matrix_size+row*mendelgpu->g_max_window+col];
+              //    if (debug)cerr<<"for row,col "<<row<<","<<col<<" GOT HERE 1 with vals "<<hap1_logprob[col]<<","<<hap2_logprob[col]<<"\n";
+             //  
+             //   }else{
+             //     hap1_logprob[col] = 0;
+             //     hap2_logprob[col] = 0;
+             //   }
+             // }
+             // float ll = get_bam_loglikelihood(mendelgpu->g_max_window,hap1_logprob,hap2_logprob);
+             // if (debug) cerr<<"OLD current log like "<<ll<<endl; 
+// BEGIN NEW SECTION
+              float hap1_logprob_new[mendelgpu->g_max_window];
+              float hap2_logprob_new[mendelgpu->g_max_window];
+              int vector_offset = vector_offsets[subject*compact_rows+row];
+              int haplotype_offset = haplotype_offsets[subject*compact_rows+row];
+              int read_length = read_lengths[subject*compact_rows+row];
+              if(debug) {
+                cerr<<"Hap offset is "<<haplotype_offset<<endl;
+                cerr<<"vec offset is "<<vector_offset<<endl;
+                cerr<<"readlen "<<read_length<<endl;
+              }
+              for(int j=0;j<read_length;++j){
+                if(haplotype_offset+j<mendelgpu->g_markers){
+                  int read_allele = read_alleles_vec[subject*read_compact_matrix_size+vector_offset+j];
+                  float match_logprob = read_match_logvec[subject*read_compact_matrix_size+vector_offset+j];
+                  float mismatch_logprob = read_mismatch_logvec[subject*read_compact_matrix_size+vector_offset+j];
+                  hap1_logprob_new[j] = mendelgpu->g_haplotype[hap1*mendelgpu->g_max_window+haplotype_offset+j]==read_allele?match_logprob:mismatch_logprob;
+                  hap2_logprob_new[j] = mendelgpu->g_haplotype[hap2*mendelgpu->g_max_window+haplotype_offset+j]==read_allele?match_logprob:mismatch_logprob;
+                  if (debug)cerr<<"for row "<<row<<","<<" hapindex: "<<haplotype_offset+j<<" vec index: "<<vector_offset+j<<" GOT HERE 2 with vals "<<hap1_logprob_new[j]<<","<<hap2_logprob_new[j]<<" and read allele is "<<read_allele<<" and match,mismatch are "<<match_logprob<<","<<mismatch_logprob<<"\n";
                 }
               }
-              float ll = get_bam_loglikelihood(mendelgpu->g_max_window,hap1_logprob,hap2_logprob);
-              //if (debug) cerr<<"current log like "<<ll<<endl; 
-              log_like+=ll;
+              float ll2 = get_bam_loglikelihood(read_length,hap1_logprob_new,hap2_logprob_new);
+              if (debug) cerr<<"NEW current log like "<<ll2<<endl; 
+// END NEW SECTION
+              log_like+=ll2;
             }
             if(debug) cerr<<"Log likelihood of all reads for haps "<<hap1<<","<<hap2<<" is "<<log_like<<endl;
             if (log_like>max_log_pen) max_log_pen = log_like;
@@ -178,7 +218,7 @@ void ReadPenetrance::process_read_matrices(){
       }
     }
     cerr<<"Exiting compute penetrance in "<<(clock()-start)/CLOCKS_PER_SEC<<"\n";
-    if(debug_penmat) exit(0);
+    //if(debug_penmat) exit(0);
   }
   return;
 }
