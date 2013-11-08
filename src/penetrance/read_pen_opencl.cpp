@@ -10,15 +10,19 @@ void ReadPenetrance::process_read_matrices_opencl(){
   
   int penetrance_matrix_size = mendelgpu->g_max_haplotypes*mendelgpu->g_max_haplotypes;
   //bool debug_penmat = g_markers==-6;
-  bool debug_penmat = false;
+  bool debug_penmat = true;
   int debug_penmat_person = 11;
   if (mendelgpu->run_gpu){
 #ifdef USE_GPU
   //  double start = clock();
-    mendelgpu->writeToBuffer(buffer_read_alleles_mat,mendelgpu->g_people*read_compact_matrix_size,read_alleles_mat,"buffer_read_alleles_mat");
-    mendelgpu->writeToBuffer(buffer_read_match_logmat,mendelgpu->g_people*read_compact_matrix_size,read_match_logmat,"buffer_read_match_logmat");
-    mendelgpu->writeToBuffer(buffer_read_mismatch_logmat,mendelgpu->g_people*read_compact_matrix_size,read_mismatch_logmat,"buffer_read_mismatch_logmat");
+    mendelgpu->writeToBuffer(buffer_read_alleles_vec,mendelgpu->g_people*max_vector_length,read_alleles_vec,"buffer_read_alleles_vec");
+    mendelgpu->writeToBuffer(buffer_read_match_logvec,mendelgpu->g_people*max_vector_length,read_match_logvec,"buffer_read_match_logvec");
+    mendelgpu->writeToBuffer(buffer_read_mismatch_logvec,mendelgpu->g_people*max_vector_length,read_mismatch_logvec,"buffer_read_mismatch_logvec");
+    mendelgpu->writeToBuffer(buffer_vector_offsets,mendelgpu->g_people*compact_rows,vector_offsets,"buffer_vector_offsets");
+    mendelgpu->writeToBuffer(buffer_read_lengths,mendelgpu->g_people*compact_rows,read_lengths,"buffer_read_lengths");
+    mendelgpu->writeToBuffer(buffer_haplotype_offsets,mendelgpu->g_people*compact_rows,haplotype_offsets,"buffer_haplotype_offsets");
     mendelgpu->writeToBuffer(buffer_mat_rows_by_subject,mendelgpu->g_people,mat_rows_by_subject,"buffer_mat_rows_by_subject");
+    mendelgpu->writeToBuffer(buffer_best_haplotypes,mendelgpu->g_people*mendelgpu->g_max_haplotypes,best_haplotypes,"buffer_best_haplotypes");
     int iteration;
     //double start = clock();
     mendelgpu->runKernel("reads_compute_penetrance",kernel_reads_compute_penetrance,mendelgpu->g_max_haplotypes*SMALL_BLOCK_WIDTH,mendelgpu->g_max_haplotypes,mendelgpu->g_people,SMALL_BLOCK_WIDTH,1,1);
@@ -36,19 +40,18 @@ void ReadPenetrance::process_read_matrices_opencl(){
       float * debug_logcache = new float[mendelgpu->g_people*penetrance_matrix_size];
       mendelgpu->readFromBuffer(mendelgpu->buffer_penetrance_cache, mendelgpu->g_people*penetrance_matrix_size,debug_cache,"mendelgpu->buffer_penetrance_cache");
       mendelgpu->readFromBuffer(mendelgpu->buffer_logpenetrance_cache, mendelgpu->g_people*penetrance_matrix_size,debug_logcache,"mendelgpu->buffer_logpenetrance_cache");
-      cout<<"fast GPU for person "<<debug_penmat_person<<":\n";
+      cerr<<"fast GPU for person "<<debug_penmat_person<<":\n";
       for (int subject=debug_penmat_person;subject<=debug_penmat_person;++subject){
-        cout<<"SUBJECT "<<subject<<endl;
+        cerr<<"SUBJECT "<<subject<<endl;
         for(int j=0;j<mendelgpu->g_max_haplotypes;++j){
           if (mendelgpu->g_active_haplotype[j]){
-            cout<<j<<":";
             for(int k=0;k<mendelgpu->g_max_haplotypes;++k){
               if (mendelgpu->g_active_haplotype[k]){
-                cout<<" "<<debug_cache[subject*penetrance_matrix_size+j*mendelgpu->g_max_haplotypes+k];
-                //cout<<" "<<debug_logcache[subject*penetrance_matrix_size+j*mendelgpu->g_max_haplotypes+k]<<","<<debug_cache[subject*penetrance_matrix_size+j*mendelgpu->g_max_haplotypes+k];
+                //cerr<<" "<<debug_cache[subject*penetrance_matrix_size+j*mendelgpu->g_max_haplotypes+k];
+                cerr<<" "<<j<<","<<k<<":"<<debug_logcache[subject*penetrance_matrix_size+j*mendelgpu->g_max_haplotypes+k]<<","<<debug_cache[subject*penetrance_matrix_size+j*mendelgpu->g_max_haplotypes+k];
               }
             }
-            cout<<endl;
+            cerr<<endl;
           }
         }
       }

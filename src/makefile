@@ -6,7 +6,8 @@ include include.mk
 DIRS=init
 DIRS+=penetrance
 DIRS+=imputation
-DIRS+=bam_utility
+
+MISC_DIRS=bam_utility
 
 LIBDIR=../lib
 
@@ -28,6 +29,9 @@ impute::
 impute:: $(COMMON_OBJS)
 	$(LINKER) -o $(PROGRAM) $(LINK_FLAGS) $(SUB_OBJS) $(COMMON_OBJS)  -L. $(SAMTOOLS)/libbam.a
 
+utility:
+	for dir in $(MISC_DIRS); do(cd $$dir; make $1 || exit 1) || exit 1; done
+
 matrix_completion.o: matrix_completion.f90
 	$(F_COMPILER) $(FINC_FLAGS) -c $<
 
@@ -47,5 +51,5 @@ cl_templates.o: cl_templates.cpp cl_templates.hpp
 	$(C_COMPILER) $(CINC_FLAGS) $(PREPROC) -c $<
 
 clean:
-	for dir in $(DIRS); do(cd $$dir; make clean || exit 1) || exit 1; done
+	for dir in $(MISC_DIRS) $(DIRS); do(cd $$dir; make clean || exit 1) || exit 1; done
 	rm -f $(PROGRAM) $(OBJS) *.mod *.o

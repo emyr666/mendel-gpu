@@ -76,14 +76,16 @@ void ReadParser::process_region(const pileup_key_t & key,const pileup_val_t & va
         //if (debug) cerr<<"MAX MATRIX WIDTH is "<<MAX_MATRIX_WIDTH<<endl;
         for(int j=0;j<val.lengths[i];++j){
           int matrix_col = j+parser->cursor;
-          if (matrix_col<MAX_MATRIX_WIDTH){
-            parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+matrix_col] = val.alleles_compact[val.offsets[i]+j];
-            if (debug) cerr<<"  Allele at row,col "<<parser->matrix_rows<<","<<matrix_col<<" is "<<parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+matrix_col]<<endl;
-          }else{
-            if (debug) cerr<<"matrix col is "<<matrix_col<<endl;
+          if (val.offsets[i]+j < MAX_VECTOR_LENGTH){
+            if (matrix_col<MAX_MATRIX_WIDTH){
+              parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+matrix_col] = val.alleles_compact[val.offsets[i]+j];
+              if (debug) cerr<<"  Allele at row,col "<<parser->matrix_rows<<","<<matrix_col<<" is "<<parser->matrix_alleles[parser->matrix_rows * MAX_MATRIX_WIDTH+matrix_col]<<endl;
+            }else{
+              if (debug) cerr<<"matrix col is "<<matrix_col<<endl;
+            }
+            parser->logmatch_quality[parser->matrix_rows][j] = val.logmatch_qualities_compact[val.offsets[i]+j];
+            parser->logmismatch_quality[parser->matrix_rows][j] = val.logmismatch_qualities_compact[val.offsets[i]+j];
           }
-          parser->logmatch_quality[parser->matrix_rows][j] = val.logmatch_qualities_compact[val.offsets[i]+j];
-          parser->logmismatch_quality[parser->matrix_rows][j] = val.logmismatch_qualities_compact[val.offsets[i]+j];
         } 
         //  for(int j=0;j<parser->read_len[parser->matrix_rows];++j){
         //    int col = parser->cursor+j;
@@ -237,14 +239,12 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
         for(int k=0;k<bam->core.n_cigar;++k){
           int cop = cigar[k] & BAM_CIGAR_MASK;
           int c1 = cigar[k] >> BAM_CIGAR_SHIFT;
-          //plval.cigar_ops[i][k] = cop;
-          //plval.cigar_len[i][k] = c1;
           if (debug) cerr<<"  At cursor: "<<cursor<<endl;
           if (debug) cerr<<"  Current cigar len "<<c1<<" of type ";
           if (cop==BAM_CMATCH ){
-            string read_substr(seq_str,cursor,1);
             assert(cursor<MAX_MATRIX_WIDTH);
-            //if (offset+cursor<MAX_MATRIX_WIDTH){
+            string read_substr(seq_str,cursor,1);
+            if(vectorized_col<MAX_VECTOR_LENGTH){
               if (read_substr.compare("=")==0){
                 if (debug) cerr<<" MATCH\n";
                 //plval.alleles[i*MAX_MATRIX_WIDTH + cursor] = 0;
@@ -257,15 +257,13 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
                 cerr<<"Unknown read_substr is "<<read_substr<<" for subject "<<plkey.subject<<" and query pos "<<plkey.querypos<<endl;
                 exit(0);
               }
-
               plval.logmatch_qualities_compact[vectorized_col] = 
               temp_logmatch[i*MAX_MATRIX_WIDTH+cursor];
               plval.logmismatch_qualities_compact[vectorized_col] = 
               temp_logmismatch[i*MAX_MATRIX_WIDTH+cursor];
-
-              ++vectorized_col;
-              if (debug)  cerr<<"  Inserted "<< plval.alleles_compact[vectorized_col]<<" into row "<<i<<" and col "<<cursor<<endl;
-            //}
+              if (debug) cerr<<"  Inserted "<< plval.alleles_compact[vectorized_col]<<" into row "<<i<<" and col "<<cursor<<endl;
+            }
+            ++vectorized_col;
             current_genomic_pos+=c1;
             position_set.insert(current_genomic_pos);
             ++cursor;
@@ -514,13 +512,15 @@ void ReadParser::make_partial_pileup(int lastpos,int currentpos,int offset,pileu
       //if(debug) cerr<<"lengths,offsets at read "<<i<<": "<<val.lengths[i]<<","<<orig_val.offsets[i]<<endl;
       for(int j=0;j<orig_val.lengths[i];++j){
         if (j>=offset){
-          val.alleles_compact[output_vectorized_col] = 
-          orig_val.alleles_compact[orig_val.offsets[i]+j];
-          //if(debug) cerr<<"At val.offset "<<orig_val.offsets[i]<<" j "<<j<<" alleles is "<<val.alleles_compact[output_vectorized_col]<<endl;
-          val.logmatch_qualities_compact[output_vectorized_col] = 
-          orig_val.logmatch_qualities_compact[orig_val.offsets[i]+j];
-          val.logmismatch_qualities_compact[output_vectorized_col] = 
-          orig_val.logmismatch_qualities_compact[orig_val.offsets[i]+j];
+          if(output_vectorized_col<MAX_VECTOR_LENGTH){
+            val.alleles_compact[output_vectorized_col] = 
+            orig_val.alleles_compact[orig_val.offsets[i]+j];
+            //if(debug) cerr<<"At val.offset "<<orig_val.offsets[i]<<" j "<<j<<" alleles is "<<val.alleles_compact[output_vectorized_col]<<endl;
+            val.logmatch_qualities_compact[output_vectorized_col] = 
+            orig_val.logmatch_qualities_compact[orig_val.offsets[i]+j];
+            val.logmismatch_qualities_compact[output_vectorized_col] = 
+            orig_val.logmismatch_qualities_compact[orig_val.offsets[i]+j];
+          }
           ++output_vectorized_col;
         }
       }

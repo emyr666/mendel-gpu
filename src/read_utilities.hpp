@@ -20,6 +20,7 @@ using namespace std;
 class ReadParser;
 
 struct read_constants_t{
+  static const uint MAX_VECTOR_LENGTH = 256;
   static const uint MAX_MATRIX_WIDTH = 40;
   static const uint MAX_SUPERREADS = 50;
   static const uint MAX_SUBREADS = 30;
@@ -56,9 +57,9 @@ struct pileup_val_t:public read_constants_t{
   //float logmismatch_qualities[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
 
   // experimental way of storing sparse matrix
-  int alleles_compact[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
-  float logmatch_qualities_compact[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
-  float logmismatch_qualities_compact[MAX_SUPERREADS * MAX_MATRIX_WIDTH];
+  int alleles_compact[MAX_VECTOR_LENGTH];
+  float logmatch_qualities_compact[MAX_VECTOR_LENGTH];
+  float logmismatch_qualities_compact[MAX_VECTOR_LENGTH];
   int offsets[MAX_SUPERREADS];
 };
 
@@ -169,15 +170,26 @@ protected:
   #ifdef USE_GPU
   cl::Kernel * kernel_reads_compute_penetrance;
   cl::Kernel * kernel_reads_adjust_penetrance;
-  cl::Buffer * buffer_read_alleles_mat;
-  cl::Buffer * buffer_read_match_logmat;
-  cl::Buffer * buffer_read_mismatch_logmat;
   cl::Buffer * buffer_mat_rows_by_subject;
+
+  //cl::Buffer * buffer_read_alleles_mat;
+  //cl::Buffer * buffer_read_match_logmat;
+  //cl::Buffer * buffer_read_mismatch_logmat;
+
+  cl::Buffer * buffer_read_alleles_vec;
+  cl::Buffer * buffer_read_match_logvec;
+  cl::Buffer * buffer_read_mismatch_logvec;
+  cl::Buffer * buffer_vector_offsets;
+  cl::Buffer * buffer_read_lengths;
+  cl::Buffer * buffer_haplotype_offsets;
+  cl::Buffer * buffer_best_haplotypes;
   #endif
   // functions for penetrance calculations of reads
   float get_bam_loglikelihood(int len,float *  hap1prob,float *  hap2prob);
+  void find_best_haplotypes();
   float log_half;
   int compact_rows;
+  int max_vector_length;
   int full_rows;
   int read_compact_matrix_size;
   int read_full_matrix_size;
@@ -192,6 +204,8 @@ protected:
   int * vector_offsets;
   int * read_lengths;
   int * haplotype_offsets;
+
+  int * best_haplotypes;
 
 private:
   MendelGPU * mendelgpu;

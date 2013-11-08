@@ -56,7 +56,7 @@ void MendelGPU::allocate_memory(){
   gf_epsilon = 1e-10;
   gf_convergence_criterion = 1e-4;
   gf_logpen_threshold = -10;
-  debug_opencl = false;
+  debug_opencl = true;
   // this will provide the base path for the kernels
   imputation_software = getenv("IMPUTATION_SOFTWARE");
   cerr<<"Software base path is at "<<imputation_software<<endl;

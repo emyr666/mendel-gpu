@@ -19,6 +19,7 @@ ReadPenetrance::~ReadPenetrance(){
   delete[] vector_offsets;
   delete[] haplotype_offsets;
   delete[] read_lengths;
+  delete[] best_haplotypes;
   cerr<<"Exiting destructor Read penetrance\n";
 
 }
@@ -40,6 +41,7 @@ ReadPenetrance::ReadPenetrance(MendelGPU * mendelgpu){
   parser = new ReadParser();
   parser->init(config->bamfile.data(),variants.data());
   compact_rows = ReadParser::MAX_SUPERREADS;
+  max_vector_length = ReadParser::MAX_VECTOR_LENGTH;
   full_rows = ReadParser::MAX_SUPERREADS*ReadParser::MAX_SUBREADS;
   read_full_matrix_size = full_rows*mendelgpu->g_max_window;
   read_compact_matrix_size = compact_rows*mendelgpu->g_max_window;
@@ -49,10 +51,12 @@ ReadPenetrance::ReadPenetrance(MendelGPU * mendelgpu){
   read_mismatch_logmat = new float[mendelgpu->g_people*read_compact_matrix_size];
   mat_rows_by_subject = new int[mendelgpu->g_people];
 
-  read_alleles_vec = new int[mendelgpu->g_people*read_compact_matrix_size];
-  read_match_logvec = new float[mendelgpu->g_people*read_compact_matrix_size];
-  read_mismatch_logvec = new float[mendelgpu->g_people*read_compact_matrix_size];
+  read_alleles_vec = new int[mendelgpu->g_people*max_vector_length];
+  read_match_logvec = new float[mendelgpu->g_people*max_vector_length];
+  read_mismatch_logvec = new float[mendelgpu->g_people*max_vector_length];
+
   vector_offsets = new int[mendelgpu->g_people*compact_rows];
   haplotype_offsets = new int[mendelgpu->g_people*compact_rows];
   read_lengths = new int[mendelgpu->g_people*compact_rows];
+  best_haplotypes = new int[mendelgpu->g_people*mendelgpu->g_max_haplotypes];
 }
