@@ -157,17 +157,16 @@ void ReadPenetrance::find_best_haplotypes(){
     }
     int debug_penmat_person_start = 11;
     int debug_penmat_person_end = 11;
+    bool debug_screen = subject>=debug_penmat_person_start && subject<=debug_penmat_person_end;
     int i = 0;
-    if(debug && (subject>=debug_penmat_person_start && subject<=debug_penmat_person_end)) {
-      cerr<<"SCREEN FOR SUBJECT "<<subject<<endl;
-      for(order_hap_set_t::iterator it = ohs.begin();it!=ohs.end();it++){
-        order_hap_t oh = *it;
-        if(i<10){
-          if(debug) cerr<<oh.index1<<": "<<oh.logprob<<endl;
-          best_haplotypes[subject*mendelgpu->g_max_haplotypes+oh.index1] = 1;
-        }
-        ++i;
+    if(debug_screen)  cerr<<"SCREEN FOR SUBJECT "<<subject<<endl;
+    for(order_hap_set_t::iterator it = ohs.begin();it!=ohs.end();it++){
+      order_hap_t oh = *it;
+      if(i<10){
+        if(debug_screen) cerr<<oh.index1<<": "<<oh.logprob<<endl;
+        best_haplotypes[subject*mendelgpu->g_max_haplotypes+oh.index1] = 1;
       }
+      ++i;
     }
   }
   cerr<<"Elapsed time for CPU screen haplotypes: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;
