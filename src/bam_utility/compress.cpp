@@ -28,6 +28,7 @@ int srb_read_index;
 void print_output(faidx_t * fasta_index,uint current_position);
 
 struct snp_t{
+  uint index;
   uint position;
   uint pileup_pos;
   uint snp_type; //0 for regular, 1 for insertion, 2 for deletion
@@ -40,7 +41,8 @@ struct snp_t{
 
 struct by_snp_position{
   bool operator()(const snp_t & snp1, const snp_t & snp2){
-    bool returnval = snp1.position<snp2.position;
+    bool returnval = snp1.index<snp2.index;
+    //bool returnval = snp1.position<snp2.position;
     return returnval;
   }
 };
@@ -323,6 +325,7 @@ static int pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pileup1
           snp_set = bam_map[newbam];
         } 
         snp_t snp;
+        snp.index = tmp->snp.index;
         snp.position = tmp->snp.position;
         snp.pileup_pos = pl[i].qpos;
         snp.ref_allele = tmp->snp.ref_allele;
@@ -367,6 +370,7 @@ void parse_variants(const char * filename, tmpstruct_t & tmp){
   string line;
   getline(ifs,line);
   srb_read_index = 0;
+  tmp.snp.index = 0;
   while(getline(ifs,line)){
     string chr,id;
     istringstream iss(line);
@@ -380,7 +384,12 @@ void parse_variants(const char * filename, tmpstruct_t & tmp){
     }
     // generate pileup for this region
     ostringstream oss;
-    oss<<subject<<":"<<tmp.snp.position<<"-"<<tmp.snp.position;
+    bool use_subject = subject>=0;
+    if (use_subject){
+      oss<<subject<<":"<<tmp.snp.position<<"-"<<tmp.snp.position;
+    }else{
+      oss<<chr<<":"<<tmp.snp.position<<"-"<<tmp.snp.position;
+    }
     oss.flush();
     //const char * region = oss.str().data();
     string regionstr = oss.str();
@@ -402,6 +411,7 @@ void parse_variants(const char * filename, tmpstruct_t & tmp){
     bam_plbuf_push(0, buf); // finalize pileup
     bam_plbuf_destroy(buf);
     print_output(tmp.fasta_index,tmp.snp.position);
+    ++tmp.snp.index;
   }
   print_output(tmp.fasta_index,1e9);
   ifs.close();
@@ -427,25 +437,31 @@ void print_output(faidx_t * fasta_index,uint current_position){
       //snp_set_t snp_set = reduced_bam.snp_set;
       int first_position = 0;
       int last_pos = -1;
-      int snp_index = 0;
+      int last_index = -1;
+      int read_snp_index = 0;
+      bool valid_srb = true;
       for (snp_set_t::iterator it2 = snp_set.begin();it2!=snp_set.end();it2++){
         snp_t snp = *it2;
-        if (snp_index==0) first_position = snp.position;
+        if (last_index>-1 && snp.index-last_index > 1){
+          valid_srb = false;
+          //cerr<<"This SRB should be invalid.\n";
+        }
+        if (read_snp_index==0) first_position = snp.position;
         if (last_pos>=0 && (snp.position-(last_pos+1)))
           oss_new_cigar<<(snp.position-(last_pos+1))<<"P";
         oss_new_cigar<<"1M";      
         char seqchar = snp.is_poly ? 'X' : '=';
         oss_new_seq<<seqchar;
-        //if (snp_index) oss_new_qual<<",";
+        //if (read_snp_index) oss_new_qual<<",";
         //oss_new_qual<<static_cast<int>(snp.qual);
         base_qual_vec.push_back(snp.qual);
         //oss_new_qual<<static_cast<char>(snp.qual+33);
-        cerr<<" snp at "<<snp.position<<" has alleles "<<snp.ref_allele<<" and "<<snp.alt_allele<<" and read allele "<<snp.read_allele<<" poly status: "<<snp.is_poly<<endl;
+        cerr<<" snp at "<<snp.position<<" of index "<<snp.index<<" has alleles "<<snp.ref_allele<<" and "<<snp.alt_allele<<" and read allele "<<snp.read_allele<<" poly status: "<<snp.is_poly<<endl;
         int fasta_len;
         ostringstream oss_region;
         oss_region<<reduced_bam.rname<<":"<<snp.position<<"-"<<snp.position<<endl;
         string oss_region_str = oss_region.str();
-        bool debug_refseq = false;
+        bool debug_refseq = true;
         if (debug_refseq){
           const char * fasta_rawseq = fai_fetch(fasta_index,oss_region_str.data(),&fasta_len);
           cerr<<" ref seq reports:";
@@ -455,7 +471,8 @@ void print_output(faidx_t * fasta_index,uint current_position){
         cerr<<endl;
         }
         last_pos = snp.position;
-        ++snp_index;
+        last_index = snp.index;
+        ++read_snp_index;
       }
       //if (reduced_bam.cigar_len-(last_pileup_pos+1))
        //oss_new_cigar<<(reduced_bam.cigar_len-(last_pileup_pos+1))<<"P";
@@ -482,7 +499,8 @@ void print_output(faidx_t * fasta_index,uint current_position){
       for(vector<int>::iterator it = base_qual_vec.begin();it!=base_qual_vec.end();it++){
         srb.qual_vector.push_back(*it);
       }
-      small_reduced_bam_set.insert(srb);
+      
+      if (valid_srb) small_reduced_bam_set.insert(srb);
       ++read_index;
       reduced_bam_delete_vector.push_back(reduced_bam);
     }

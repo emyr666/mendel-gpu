@@ -61,6 +61,7 @@ protected:
   int g_people;
   int g_max_window;
   int g_max_haplotypes;
+  int g_total_best_haps;
   int g_haplotype_mode;
   int g_likelihood_mode;
   float g_delta;
@@ -72,21 +73,26 @@ protected:
   int g_haplotypes;
   int * g_active_haplotype;
   int * g_haplotype;
+  int * g_left_hap_imputed;
   float * g_old_frequency;
   float * g_frequency;
   int g_left_marker;
   int g_right_marker;
   int g_center_snp_start;
   int g_center_snp_end;
+  int g_left_flanking_snps;
+  float * scaled_penetrance_cache;
   float * penetrance_cache;
   float * logpenetrance_cache;
   int * haploid_arr;
   int g_genotype_imputation;
   float * subject_haplotype_weight;
+  float * subject_haplotype_screen;
   float * frequency_cache;
   float * g_current_weight;
   float * g_weight;
   float * max_penetrance;
+  int * true_haps; // for debugging. This is g_people by g_snps
   #ifdef USE_GPU
   cl_int err;
   // commandQueue is used to carry out memory transfers and kernel launches
@@ -126,6 +132,11 @@ protected:
   
 
   #endif
+  // utility functions
+  void assign_penetrance_element(int subject, int hap1, int hap2,float val, float * pencache, bool swap);
+  void debug_haplotypes(ostream & os);
+  void debug_haplotype(ostream & os,int j);
+  int hamming(int * hap1, int * hap2, int len);
 
   string hapstr(int * haplotype, int marker_len);
   float compute_rsq(float * dosages,int stride,int index);
@@ -325,8 +336,6 @@ protected:
   void prune_haplotypes_();
   // init opencl
   void init_window_opencl();
-  // utility functions
-  void debug_haplotypes(ostream & os);
 
 #ifdef USE_GPU
   cl::Kernel * kernel_impute_genotype_denovo;

@@ -39,17 +39,18 @@ DenovoMendelGPU::DenovoMendelGPU(IO_manager * io):MendelGPU(io){
 
 DenovoMendelGPU::~DenovoMendelGPU(){
   cerr<<"Entering destructor denovo haplotyper\n";
-  delete[] g_haplotype ;
   delete[] twin_hap_index;
   delete[] beyond_left_edge_dosage;
   delete[] right_edge_dosage;
   delete[] center_dosage;
   delete[] g_hap_perm;
+  return;
   cerr<<"Exiting destructor denovo haplotyper\n";
 }
 
 
 void DenovoMendelGPU::init_window(){
+  MendelGPU::init_window();
   double_haplotypes();
   polymorphic_window = true;
   char zero = '0';
@@ -185,7 +186,7 @@ void DenovoMendelGPU::prune_haplotypes_(){
   cerr<<"Entering prune haplotypes\n";
   int half_max = g_max_haplotypes/2;
   int non_polymorphic_min = 2;
-  //int threshold = g_haplotypes;
+  //int threshold = g_max_haplotypes;
   int threshold = half_max;
   if (g_haplotypes>threshold){
     int marker_len = g_markers;
@@ -277,14 +278,3 @@ void DenovoMendelGPU::prune_haplotypes_(){
 }
 
 
-void DenovoMendelGPU::debug_haplotypes(ostream & os){
-  for(int i=0;i<g_max_haplotypes;++i){
-    if (g_active_haplotype[i]){
-      os<<i<<":";
-      for(int j=0;j<g_markers;++j){
-        os<<g_haplotype[i*g_max_window+j];
-      }
-      os<<endl;
-    }
-  }
-}

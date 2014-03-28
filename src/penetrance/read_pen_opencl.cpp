@@ -10,7 +10,7 @@ void ReadPenetrance::process_read_matrices_opencl(){
   
   int penetrance_matrix_size = mendelgpu->g_max_haplotypes*mendelgpu->g_max_haplotypes;
   //bool debug_penmat = g_markers==-6;
-  bool debug_penmat = true;
+  bool debug_penmat = false;
   int debug_penmat_person = 11;
   if (mendelgpu->run_gpu){
 #ifdef USE_GPU

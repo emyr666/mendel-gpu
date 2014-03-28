@@ -30,9 +30,11 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
   bool debug_penmat = g_left_marker==-1;
   if(run_cpu){
     double start = clock();
+    float max_log_pen_arr[g_people];
+    for(int i=0;i<g_people;++i) max_log_pen_arr[i] = -1e10;
     for(int i=0;i<g_people;++i){
       int haploid = haploid_arr[i];
-      float maxlog = -1e10;
+      //float maxlog = -1e10;
       for(int j=0;j<g_max_haplotypes;++j){
         if(g_active_haplotype[j] ){
           if (geno_dim==PHASED_INPUT){
@@ -57,8 +59,8 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
               logpenetrance[parent] = g_haplotypes>2?logpenetrance_cache[i*
               2*g_max_haplotypes+2*j+parent] + logpenetrance_new[parent]-
               logpenetrance_old[parent]: logpenetrance_new[parent];
-              if (logpenetrance[parent] > maxlog) 
-              maxlog = logpenetrance[parent];
+              if (logpenetrance[parent] > max_log_pen_arr[i]) 
+              max_log_pen_arr[i] = logpenetrance[parent];
               logpenetrance_cache[i*2*g_max_haplotypes+2*j+parent] = 
               logpenetrance[parent]; 
             }
@@ -78,7 +80,7 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
                   float logpenetrance = g_haplotypes>2?logpenetrance_cache[i*
                   penetrance_matrix_size+j*g_max_haplotypes+k] + 
                   logpenetrance_new-logpenetrance_old:logpenetrance_new;
-                  if (logpenetrance > maxlog) maxlog = logpenetrance;
+                  if (logpenetrance > max_log_pen_arr[i]) max_log_pen_arr[i] = logpenetrance;
                   logpenetrance_cache[i*penetrance_matrix_size+j*
                   g_max_haplotypes+k] = logpenetrance; 
                 }
@@ -89,12 +91,23 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
           }
         } 
       }
+    }
+    float max_log_pen = -1e10;
+    for(int subject=0;subject<g_people;++subject){
+      // get the least upper bound on the log penetrances
+      if (max_log_pen_arr[subject]>max_log_pen)max_log_pen = max_log_pen_arr[subject];
+    }
+
+    cerr<<"Max log penetrance across subjects is "<<max_log_pen<<endl;
+
+    for(int i=0;i<g_people;++i){
+      int haploid = haploid_arr[i];
       for(int j=0;j<g_max_haplotypes;++j){
         if (g_active_haplotype[j] ){
           if (geno_dim==PHASED_INPUT){
             for(int parent=0;parent<2;++parent){
               float val = logpenetrance_cache[i*2*g_max_haplotypes+2*
-              j+parent]-maxlog;
+              j+parent]-max_log_pen_arr[i];
               logpenetrance_cache[i*2*g_max_haplotypes+2*j+parent] = val;
               penetrance_cache[i*2*g_max_haplotypes+2*j+parent] = 
               val>=gf_logpen_threshold?exp(val):0;
@@ -102,17 +115,20 @@ void DenovoGlfMendelGPU::precompute_penetrance_fast(){
           }else{
             for(int k=j;k<g_max_haplotypes;++k){
               if (g_active_haplotype[k] && (!haploid || k==j)){
-                float val = logpenetrance_cache[i*penetrance_matrix_size+j*
-                g_max_haplotypes+k]-maxlog;
-                logpenetrance_cache[i*penetrance_matrix_size+j*
-                g_max_haplotypes+k] = val;
-                logpenetrance_cache[i*penetrance_matrix_size+k*
-                g_max_haplotypes+j] = val;
-                penetrance_cache[i*penetrance_matrix_size+j*
-                g_max_haplotypes+k] = val>=gf_logpen_threshold?exp(val):0;
-                penetrance_cache[i*penetrance_matrix_size+k*
-                g_max_haplotypes+j] = penetrance_cache[i*
+                float unscaledval = logpenetrance_cache[i*
                 penetrance_matrix_size+j*g_max_haplotypes+k];
+                logpenetrance_cache[i*penetrance_matrix_size+k*
+                g_max_haplotypes+j] = unscaledval;
+                float global_scaledval = unscaledval - max_log_pen;
+                float scaledval = unscaledval - max_log_pen_arr[i];
+                assign_penetrance_element(i,j,k,global_scaledval,penetrance_cache,false);
+                assign_penetrance_element(i,j,k,scaledval,scaled_penetrance_cache,true);
+
+                //penetrance_cache[i*penetrance_matrix_size+j*
+                //g_max_haplotypes+k] = val>=gf_logpen_threshold?exp(val):0;
+                //penetrance_cache[i*penetrance_matrix_size+k*
+                //g_max_haplotypes+j] = penetrance_cache[i*
+                //penetrance_matrix_size+j*g_max_haplotypes+k];
               }
             }
           }

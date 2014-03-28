@@ -16,6 +16,7 @@ struct Config{
   string refhapfile;
   string inputformat;
   int g_likelihood_mode;
+  int total_best_haps;
   string famfile;
   string bimfile;
   string bedfile;
@@ -37,6 +38,7 @@ struct Config{
   string file_genotype;
   string file_dosage;
   string file_quality;
+  string file_subject_hap_freq;
   int platform_id;
   int device_id;
 };
@@ -65,8 +67,11 @@ public:
   void writeGenotype(int snp_index,int * val,int len);
   void writeDosage(int snp_index,float * val,int len);
   void writeQuality(int snp_index,float val);
+  void writeSubjectHapFreq(int subjects,int snp_index, int hap_len, int max_len, int max_hap,int * active_haps, int * haplotype, float * subject_hap_weight, int * depth_by_hap);
+
 
 private:
+  bool write_hapfreq;
   int snps,persons,refhaplotypes;
   //bool use_refhap;
   map<int,string> haplotype_map;
@@ -83,5 +88,6 @@ private:
   ofstream ofs_posterior_file;
   ofstream ofs_genotype_file;
   ofstream ofs_dosage_file;
+  ofstream ofs_subject_hap_freq_file;
   ofstream ofs_quality_file;
 };

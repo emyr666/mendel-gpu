@@ -39,6 +39,7 @@
   <genotype>GENOTYPES</genotype>
   <dosage>DOSAGE</dosage>
   <quality>QUALITY</quality>
+  <subject_hap_freq></subject_hap_freq>
 </output_settings>
 <opencl_settings>
   <platform_id>0</platform_id>

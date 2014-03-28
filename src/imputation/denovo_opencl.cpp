@@ -81,6 +81,11 @@ if (g_active_haplotype[i] && g_active_haplotype[j]){
       float rsq = compute_rsq(subject_dosages,1,0);
       io_manager->writeQuality(current_snp,rsq);
     }
+    for(int i=0;i<g_people;++i){
+      int hap1_allele = true_haps[(2*i)*g_snps+current_snp];
+      int hap2_allele = true_haps[(2*i+1)*g_snps+current_snp];
+      subject_genotypes[i] = hap1_allele*2+hap2_allele;
+    }
     io_manager->writeGenotype(current_snp,subject_genotypes,g_people);
     io_manager->writePosterior(max_geno,current_snp,posterior,g_people);
     cerr<<"Elapsed time: "<<(clock()-start)/CLOCKS_PER_SEC<<endl;

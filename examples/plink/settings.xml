@@ -1,5 +1,5 @@
 <model>1</model><!--specify 1 for MM based imputation, 2 for MM based phasing, 3 for matrix completion based imputation-->
-<use_reference_panel>0</use_reference_panel>
+<use_reference_panel>1</use_reference_panel>
 <reference_panel_settings>
   <max_reference_haplotypes>1094</max_reference_haplotypes>
   <legend>top100.legend</legend>
@@ -29,6 +29,7 @@
   <total_regions>1</total_regions> <!--increase if memory is a concern-->
   <flanking_snps>3</flanking_snps>
   <max_haplotypes>16</max_haplotypes>
+  <total_best_haps>32</total_best_haps>
   <delta>1e-4</delta>
   <lambda>1e3</lambda>
   <debug>0</debug><!--yes=1, no=0-->
@@ -39,6 +40,7 @@
   <genotype>GENOTYPES</genotype>
   <dosage>DOSAGE</dosage>
   <quality>QUALITY</quality>
+  <subject_hap_freq></subject_hap_freq>
 </output_settings>
 <opencl_settings>
   <platform_id>0</platform_id>

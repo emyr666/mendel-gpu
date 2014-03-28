@@ -35,7 +35,6 @@ void GuidedMendelGPU::allocate_memory(){
 
 GuidedMendelGPU::~GuidedMendelGPU(){
   cerr<<"Entering destructor guided haplotyper\n";
-  delete[] g_haplotype ;
   delete[] packedhap;
   delete[] packedextendedhap;
   delete[] extended_snp_mapping;

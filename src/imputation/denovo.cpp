@@ -28,6 +28,7 @@ void DenovoMendelGPU::impute_genotypes(){
     //  window_polymorphisms[c_snp]){
     float dosages[g_people];
     int genotypes[g_people*geno_dim];
+    int genotypes2[g_people*geno_dim];
     float posteriors[g_people*geno_dim];
 //    if (outfile_format.compare(FORMAT_MEC)==0){
 //      ofs_dosage_file<<current_snp<<"\t";
@@ -39,22 +40,24 @@ void DenovoMendelGPU::impute_genotypes(){
       float best_prob = 0;
       float posterior_prob[4];
       int best_pair[2];
-      best_pair[0] = best_pair[1] = 0;
+      best_pair[0] = best_pair[1] = -1;
       for(int j=0;j<4;++j) posterior_prob[j] = gf_epsilon;
       for(int a=0;a<g_max_haplotypes;++a){
-        int j = g_hap_perm[a];
-        //int j = a;
+        //int j = g_hap_perm[a];
+        int j = a;
         if(g_active_haplotype[j] ){
-          for(int b=a;b<g_max_haplotypes;++b){
-            //int k = b;
-            int k = g_hap_perm[b];
+          int starthap = g_genotype_imputation?a:0;
+          for(int b=starthap;b<g_max_haplotypes;++b){
+            int k = b;
+            //int k = g_hap_perm[b];
             if(g_active_haplotype[k] && (!haploid || j==k)){
               int m;
-              float penetrance = penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
+              float penetrance = scaled_penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
               if (penetrance>0 ){
                 //cerr<<"Subject "<<i<<" penetrance at haps "<<j<<" and "<<k<<" :" <<penetrance<<endl;
-                float freq = g_frequency[j]*g_frequency[k];
-                if (j!=k) freq*=2;
+                //float freq = g_frequency[j]*g_frequency[k];
+                //if (j!=k) freq*=2;
+                float freq = 1;
                 float p = freq*penetrance;
                 if (p>best_prob){
                   best_prob = p;
@@ -107,7 +110,7 @@ void DenovoMendelGPU::impute_genotypes(){
               int m = g_haplotype[j*g_max_window+ c_snp] + 
               g_haplotype[k*g_max_window+ c_snp];
               float logpenetrance = logpenetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
-              float penetrance = penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
+              float penetrance = scaled_penetrance_cache[i*penetrance_matrix_size+j*g_max_haplotypes+k];
               float freq = g_frequency[j]*g_frequency[k];
               cerr<<j<<","<<k<<":"<<penetrance<<","<<logpenetrance<<","<<freq<<","<<m<<endl;
             }
@@ -144,13 +147,84 @@ void DenovoMendelGPU::impute_genotypes(){
         }
         genotypes[i] = geno2;
       }
+      //int no_switch = 0,with_switch = 0;
+      if (best_pair[0]<0||best_pair[1]<0){
+        cerr<<"WARNING: Could not find best pair for SNP "<<current_snp<<", subject "<<i<<", defaulting to wt homo\n";
+        genotypes2[i] = 0;
+      }else{
+        genotypes2[i] = 2*center_dosage[best_pair[0]]+center_dosage[best_pair[1]];
+        //no_switch = hamming(true_haps + (2*i)*g_snps+g_left_marker,g_haplotype + best_pair[0]*g_max_window, g_markers) + hamming(true_haps + (2*i+1)*g_snps+g_left_marker,g_haplotype + best_pair[1]*g_max_window, g_markers);
+        //with_switch = hamming(true_haps + (2*i)*g_snps+g_left_marker,g_haplotype + best_pair[1]*g_max_window, g_markers) + hamming(true_haps + (2*i+1)*g_snps+g_left_marker,g_haplotype + best_pair[0]*g_max_window, g_markers);
+      }
+      if (genotypes[i]!=genotypes2[i]){
+        //cerr<<"GENOTYPE DISCREPANCY AT SNP "<<current_snp<<" FOR SUBJECT "<<i<<":";
+        //cerr<<genotypes[i]<<","<<genotypes2[i]<<" PAIR "<<best_pair[0]<<","<<best_pair[1]<<" PROB: "<<best_prob<<endl;
+      }
+      //if (no_switch>with_switch) cerr<<"SUBJECT "<<i<<" NO SWITCH "<<no_switch<<" SWITCH "<<with_switch<<endl;
+      // populate g_left_hap_imputed with information including current
+      // imputed genotypes in anticipation of next round of penetrance
+      // calculations
+      int & geno = genotypes2[i];
+      int a1=0,a2=0;
+      if(g_genotype_imputation){
+        if (geno==1){
+          a1 = 0;
+          a2 = 1;
+        }else if (geno==2){
+          a1 = 1;
+          a2 = 1;
+        } 
+      }else{
+        if (geno==1){
+          a1 = 0;
+          a2 = 1;
+        }else if (geno==2){
+          a1 = 1;
+          a2 = 0;
+        }else if (geno==3){
+          a1 = 1;
+          a2 = 1;
+        }
+      }
+      if(g_flanking_snps){
+        //cerr<<"c_snp is "<<c_snp<<endl;
+        if (c_snp==g_flanking_snps){
+          for(int j=1;j<g_flanking_snps;++j){
+            // scoot every thing over one
+  //if(i==0)cerr<<j<<" 1 copying "<<(i*2)*g_flanking_snps+j<<" into "<<(i*2)*g_flanking_snps+j-1<<endl;
+            g_left_hap_imputed[(i*2)*g_flanking_snps+j-1] = 
+            g_left_hap_imputed[(i*2)*g_flanking_snps+j];
+  //if(i==0)cerr<<j<<" 2 copying "<<(i*2+1)*g_flanking_snps+j<<" into "<<(i*2+1)*g_flanking_snps+j-1<<endl;
+            g_left_hap_imputed[(i*2+1)*g_flanking_snps+j-1] = 
+            g_left_hap_imputed[(i*2+1)*g_flanking_snps+j];
+          }
+  //if(i==0)cerr<<" 1  "<<(i*2)*g_flanking_snps+c_snp-1<<" is "<<a1<<endl;
+  //if(i==0)cerr<<" 2  "<<(i*2+1)*g_flanking_snps+c_snp-1<<" is "<<a2<<endl;
+          g_left_hap_imputed[(i*2)*g_flanking_snps+c_snp-1] = a1;
+          g_left_hap_imputed[(i*2+1)*g_flanking_snps+c_snp-1] = a2;
+        }else{
+         //cerr<<"Storing into index "<<(i*2)*g_flanking_snps+c_snp<<" and "<<(i*2+1)*g_flanking_snps+c_snp<<endl;
+          g_left_hap_imputed[(i*2)*g_flanking_snps+c_snp] = a1;
+          g_left_hap_imputed[(i*2+1)*g_flanking_snps+c_snp] = a2;
+        }
+      }
+    }
+    if (true_haps!=NULL){
+      for(int i=0;i<g_people;++i){
+        int hap1_allele = true_haps[(2*i)*g_snps+current_snp];
+        int hap2_allele = true_haps[(2*i+1)*g_snps+current_snp];
+        //genotypes[i] = hap1_allele*2+hap2_allele;
+      }
     }
     if (geno_dim==3){
       io_manager->writeDosage(current_snp,dosages,g_people);
       float rsq = compute_rsq(dosages,1,0);
       io_manager->writeQuality(current_snp,rsq);
     }
-    io_manager->writeGenotype(current_snp,genotypes,g_people);
+    // model averaged version
+    //io_manager->writeGenotype(current_snp,genotypes,g_people);
+    // MAP version
+    io_manager->writeGenotype(current_snp,genotypes2,g_people);
     io_manager->writePosterior(geno_dim,current_snp,posteriors,g_people);
   }//END CPU VERSION
   cerr<<"done impute_geno\n";

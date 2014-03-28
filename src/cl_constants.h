@@ -8,8 +8,8 @@
 #define BLOCK_WIDTH_IMPUTE_GUIDE 256
 #define LOG_HALF -.6931472
 
-#define TEST_SUBJECT 11 
-#define TEST_SUBJECT_STR "11" 
+#define TEST_SUBJECT 0
+#define TEST_SUBJECT_STR "0" 
 
 typedef struct {
   float prob;

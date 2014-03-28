@@ -41,6 +41,9 @@ IO_manager::IO_manager(){
 }
 
 IO_manager::~IO_manager(){
+  if(write_hapfreq){
+    ofs_subject_hap_freq_file.close();
+  }
   ofs_posterior_file.close();
   ofs_genotype_file.close();
   ofs_dosage_file.close();
@@ -57,6 +60,26 @@ template <class ofs_T, class array_T> void IO_manager::write_output(ofs_T & ofs,
     }
   }
   ofs<<endl;
+}
+
+void IO_manager::writeSubjectHapFreq(int subjects,int snp_index, int hap_len, int max_len,int max_hap,int * active_haps, int * haplotype, float * subject_hap_weight,int * depth_by_hap){
+  if(write_hapfreq){
+    //cerr<<"Writing to snp "<<snp_index<<" subject "<<subject<<" hap len "<<hap_len<<" max haps "<<max_hap<<endl;
+    ofs_subject_hap_freq_file<<"SUBJECT\tHAPLOTYPE\tWEIGHT\tHIGH_CONFIDENCE_DEPTH\n";
+    for(int i=0;i<subjects;++i){
+      for(int h=0;h<max_hap;++h){
+        if(active_haps[h]){
+          ofs_subject_hap_freq_file<<i<<"\t";
+          for(int j=0;j<hap_len;++j){
+            ofs_subject_hap_freq_file<<haplotype[h*max_len+j];
+          }
+          ofs_subject_hap_freq_file<<"\t"<<subject_hap_weight[i*max_hap+h];
+          ofs_subject_hap_freq_file<<"\t"<<depth_by_hap[i*max_hap+h];
+          ofs_subject_hap_freq_file<<endl;
+        }
+      }
+    }
+  }
 }
 
 void IO_manager::writePosterior(int geno_len,int snp_index,float * val,int len){
@@ -121,6 +144,7 @@ bool IO_manager::load_config(const char * xmlfile){
     config->total_regions = pt.get<int>("tuning_parameters.total_regions");
     config->flanking_snps = pt.get<int>("tuning_parameters.flanking_snps");
     config->max_haplotypes = pt.get<int>("tuning_parameters.max_haplotypes");
+    config->total_best_haps = pt.get<int>("tuning_parameters.total_best_haps");
     config->delta = pt.get<float>("tuning_parameters.delta");
     config->lambda = pt.get<float>("tuning_parameters.lambda");
     config->debug = pt.get<bool>("tuning_parameters.debug");
@@ -129,6 +153,14 @@ bool IO_manager::load_config(const char * xmlfile){
     config->file_genotype = pt.get<string>("output_settings.genotype");
     config->file_dosage = pt.get<string>("output_settings.dosage");
     config->file_quality = pt.get<string>("output_settings.quality");
+    config->file_subject_hap_freq = pt.get<string>("output_settings.subject_hap_freq");
+    if (config->file_subject_hap_freq.length()>0){
+      cerr<<"Will write to subject_hap_freq file\n";
+      write_hapfreq = true;
+    }else{
+      cerr<<"Will NOT write to subject_hap_freq file\n";
+      write_hapfreq = false;
+    }
     config->platform_id = pt.get<int>("opencl_settings.platform_id");
     config->device_id = pt.get<int>("opencl_settings.device_id");
   }catch (const exception & e){
@@ -137,6 +169,9 @@ bool IO_manager::load_config(const char * xmlfile){
   }
   cerr<<"Configuration loaded\n";
   try{
+    if(write_hapfreq){
+      ofs_subject_hap_freq_file.open(config->file_subject_hap_freq.data());
+    }
     ofs_posterior_file.open(config->file_posterior.data());
     ofs_genotype_file.open(config->file_genotype.data());
     ofs_dosage_file.open(config->file_dosage.data());
@@ -298,35 +333,37 @@ bool IO_manager::read_input(char * & haplotype_array, float * & snp_penetrance, 
     cerr<<"Caught an exception attempting to load into array: "<<e.what()<<"\n";
     return false;
   } 
-  // attempt to read in list of haploid/diploids
-  try{
-    ifstream ifs_person;
-    ifs_person.open(config->sexfile.data());
-    haploid_arr = new int[persons];
-    if (!ifs_person.is_open()){
-      cerr <<"WARNING: Cannot find the person sex file "<<config->sexfile<<". Assuming all females\n";
-      for(int i=0;i<persons;++i) haploid_arr[i] = 0;
-    }else{
-      string line;
-      getline(ifs_person,line);
-      int person=0;
-      int haploids = 0;
-      for(int person = 0; person<persons;++person){
+  if (haploid_arr!=NULL){
+    // attempt to read in list of haploid/diploids
+    try{
+      ifstream ifs_person;
+      ifs_person.open(config->sexfile.data());
+      //haploid_arr = new int[persons];
+      if (!ifs_person.is_open()){
+        cerr <<"WARNING: Cannot find the person sex file "<<config->sexfile<<". Assuming all females\n";
+        for(int i=0;i<persons;++i) haploid_arr[i] = 0;
+      }else{
+        string line;
         getline(ifs_person,line);
-        istringstream iss(line);
-        int seq;
-        char sex;
-        iss>>seq>>sex;
-        haploid_arr[person] = (config->is_sex_chr && sex=='M')?1:0;
-        haploids+=haploid_arr[person];
+        int person=0;
+        int haploids = 0;
+        for(int person = 0; person<persons;++person){
+          getline(ifs_person,line);
+          istringstream iss(line);
+          int seq;
+          char sex;
+          iss>>seq>>sex;
+          haploid_arr[person] = (config->is_sex_chr && sex=='M')?1:0;
+          haploids+=haploid_arr[person];
+        }
+        cerr<<"Total haploids in the analysis: "<<haploids<<endl;
+        ifs_person.close();
       }
-      cerr<<"Total haploids in the analysis: "<<haploids<<endl;
-      ifs_person.close();
-    }
-  }catch (const exception & e){
-    cerr<<"Caught an exception attempting to read sex file: "<<e.what()<<"\n";
-    return false;
-  } 
+    }catch (const exception & e){
+      cerr<<"Caught an exception attempting to read sex file: "<<e.what()<<"\n";
+      return false;
+    } 
+  }
   return true;
 }
 

@@ -20,10 +20,10 @@ using namespace std;
 class ReadParser;
 
 struct read_constants_t{
-  static const uint MAX_VECTOR_LENGTH = 256;
-  static const uint MAX_MATRIX_WIDTH = 40;
+  static const uint MAX_VECTOR_LENGTH = 1000;
+  static const uint MAX_MATRIX_WIDTH = 200;
   static const uint MAX_SUPERREADS = 50;
-  static const uint MAX_SUBREADS = 30;
+  static const uint MAX_SUBREADS = 50;
   static const uint MAX_MATRIX_HEIGHT=MAX_SUPERREADS*MAX_SUBREADS;
   static const float EPSILON=1e-2;
 };
@@ -86,6 +86,7 @@ public:
 
   void extract_region(int subject_index,int snp_offset,int snps,bool clear_cache);
   void print_data();
+  int get_total_depth();
   
   static void init_phred_lookup();
   // utility function
@@ -162,6 +163,7 @@ public:
   void prefetch_reads(int start_snp, int total_snps);
   void populate_read_matrices();
   void process_read_matrices();
+  void process_read_matrices_rnaseq();
   void init_opencl();
   void free_opencl();
 protected:
@@ -186,6 +188,7 @@ protected:
   #endif
   // functions for penetrance calculations of reads
   float get_bam_loglikelihood(int len,float *  hap1prob,float *  hap2prob);
+  float get_bam_loglikelihood(int len,float *  hap1prob);
   void find_best_haplotypes();
   float log_half;
   int compact_rows;

@@ -29,8 +29,13 @@ void MendelGPU::run_sliding_window(){
       cerr<<"MM iteration "<<gi_iteration<<" and convergence "<<converged<<endl;
       ++gi_iteration;
     }while(gi_iteration<max_iter && !converged);
-    if (converged) cerr<<"Converged at iteration: "<<gi_iteration<<endl;
+    if (converged) 
+    cerr<<"Converged at iteration: "<<gi_iteration<<endl;
     else cerr<<"Frequencies did not converge\n";
+    if (g_markers==g_max_window){
+      //io_manager->writeSubjectHapFreq(g_people,g_left_marker,g_markers,g_max_window,g_max_haplotypes,g_active_haplotype,g_haplotype,subject_haplotype_weight);
+      //io_manager->writeSubjectHapFreq(g_people,g_left_marker,g_markers,g_max_window,g_max_haplotypes,g_active_haplotype,g_haplotype,subject_haplotype_screen);
+    }
     if (g_center_snp_start>0 || g_center_snp_end+g_flanking_snps==g_right_marker)
     impute_genotypes();
     finalize_window();
@@ -56,6 +61,7 @@ void MendelGPU::allocate_memory(){
   gf_epsilon = 1e-10;
   gf_convergence_criterion = 1e-4;
   gf_logpen_threshold = -10;
+  g_lambda=1;
   debug_opencl = true;
   // this will provide the base path for the kernels
   imputation_software = getenv("IMPUTATION_SOFTWARE");
@@ -63,6 +69,7 @@ void MendelGPU::allocate_memory(){
   run_gpu = config->use_gpu;
   run_cpu = config->use_cpu;
   g_flanking_snps = config->flanking_snps;
+  g_total_best_haps = config->total_best_haps;
   g_max_window = get_max_window_size();
   cerr<<"max window size is "<<g_max_window<<endl;
   g_genotype_imputation = config->model==1?1:0;
@@ -72,9 +79,17 @@ void MendelGPU::allocate_memory(){
   g_max_haplotypes = config->max_haplotypes;
   // load data sets
   load_datasets();
+  if(g_snps<g_max_window){
+    cerr<<"Max snps is "<<g_snps<<" and window size is "<<g_max_window<<endl;
+    throw "Invalid size for flanking snps.";
+  }
   // allocation begins here
   g_haplotypes = 0;
   g_haplotype = new int[g_max_haplotypes*g_max_window];  
+  if (g_flanking_snps){
+    g_left_hap_imputed = new int[2*g_people*g_flanking_snps];
+    for(int i=0;i<2*g_people*g_flanking_snps;++i) g_left_hap_imputed[i] = 9;
+  }
   g_frequency = new float[g_max_haplotypes];
   for(int i=0;i<g_max_haplotypes;++i) g_frequency[i] = 0;
   g_old_frequency = new float[g_max_haplotypes];
@@ -86,6 +101,7 @@ void MendelGPU::allocate_memory(){
     cerr<<"Allocating penetrances for phased input\n";
     penetrance_matrix_size = g_people*2*g_max_haplotypes;
     logpenetrance_cache = new float[penetrance_matrix_size];
+    scaled_penetrance_cache = new float[penetrance_matrix_size];
     penetrance_cache = new float[penetrance_matrix_size];
     frequency_cache = new float[penetrance_matrix_size];
   }else if (geno_dim==UNPHASED_INPUT){
@@ -93,14 +109,34 @@ void MendelGPU::allocate_memory(){
     cerr<<"Allocating penetrances for unphased input for "<<g_people<<" subjects and matrix size "<<penetrance_matrix_size<<"\n";
     logpenetrance_cache = new float[g_people*penetrance_matrix_size];
     penetrance_cache = new float[g_people*penetrance_matrix_size];
+    scaled_penetrance_cache = new float[g_people*penetrance_matrix_size];
     frequency_cache = new float[penetrance_matrix_size];
   }else{
     cerr<<"Invalid dim of "<<geno_dim<<endl;
     exit(1);
   }
+  // load debugging file
+  ifstream ifs_true_hap("true_haps");
+  if(ifs_true_hap.is_open()){
+    cerr<<"Found true_haps, reading in for debugging\n";
+    true_haps = new int[g_people*2*g_snps];
+    for(int j=0;j<g_snps;++j){
+      string line;
+      getline(ifs_true_hap,line);
+      istringstream iss(line);
+      for(int i=0;i<g_people;++i){
+        iss>>true_haps[(2*i)*g_snps+j];
+        iss>>true_haps[(2*i+1)*g_snps+j];
+      }
+    }
+    ifs_true_hap.close();
+  }else{
+    true_haps = NULL;
+  }
   g_current_weight = new float[g_max_haplotypes];
   g_weight = new float[g_max_haplotypes];
   subject_haplotype_weight = new float[g_people*g_max_haplotypes];
+  subject_haplotype_screen = new float[g_people*g_max_haplotypes];
   max_penetrance = new float[g_people];
   // initialize variables
   for(int j=0;j<g_max_haplotypes;++j){
@@ -112,16 +148,23 @@ void MendelGPU::allocate_memory(){
 
 MendelGPU::~MendelGPU(){
   cerr<<"Entering destructor MendelGPU\n";
+  if(g_flanking_snps){
+    delete[] g_left_hap_imputed;
+  }
+  delete[] g_haplotype ;
   delete[] g_frequency ;
   delete[] g_old_frequency ;
   delete[] g_active_haplotype ;
   delete[] logpenetrance_cache ;
+  delete[] scaled_penetrance_cache ;
   delete[] penetrance_cache ;
   delete[] frequency_cache ;
   delete[] g_current_weight ;
   delete[] g_weight ;
   delete[] subject_haplotype_weight ;
+  delete[] subject_haplotype_screen ;
   delete[] max_penetrance ;
+  delete[] haploid_arr;
   cerr<<"Exiting destructor MendelGPU\n";
 }
 
@@ -193,6 +236,11 @@ void MendelGPU::finalize_window(){
 
 void MendelGPU::init_window(){
   for(int j=0;j<g_max_haplotypes;++j) g_old_frequency[j] = g_frequency[j];
+  g_left_flanking_snps = g_flanking_snps;
+  if (g_center_snp_start<g_flanking_snps){
+    g_left_flanking_snps = g_center_snp_start;
+  }
+
 }
 
 void MendelGPU::init_iteration_buffers(){
@@ -239,6 +287,30 @@ float MendelGPU::compute_rsq(float * dosages,int stride,int index){
   return rsq;
 }
 
+void MendelGPU::debug_haplotypes(ostream & os){
+  for(int i=0;i<g_max_haplotypes;++i){
+    if (g_active_haplotype[i]){
+      debug_haplotype(os,i);
+    }
+  }
+}
+
+void MendelGPU::debug_haplotype(ostream & os, int hap){
+  for(int j=0;j<g_markers;++j){
+    os<<g_haplotype[hap*g_max_window+j];
+  }
+  os<<" <- hap "<<hap<<endl;
+}
+
+int MendelGPU::hamming(int * hap1, int * hap2, int len){
+  //cerr<<"Hamming distance on length: "<<len<<endl;
+  int h=0;
+  for(int i=0;i<len;++i){
+    h+=hap1[i]!=hap2[i];
+  }
+  return h;
+}
+
 //int main(){
 int main2(){
 #ifdef USE_GPU
@@ -260,4 +332,5 @@ int main2(){
 #endif
   return 0;
 }
+
 

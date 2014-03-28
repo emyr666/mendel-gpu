@@ -145,17 +145,17 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
     pileup_val_t plval;
     plval.total_reads = n;
     if (debug) cerr<<"Subject: "<<tmp->in->header->target_name[tid]<<" pos: "<<genomic_pos<<" total reads: "<< n<<endl;
-    if (n>MAX_SUPERREADS){
-      cerr<<"A total of "<<n<<" super reads were encountered at this position "<<genomic_pos<<", exceeding the max allocation of "<<MAX_SUPERREADS<<". Consider increasing the MAX_SUPERREADS value.\n";
-      throw "Read parser error";
-     
-    }
     set<int> position_set;
     int vectorized_col = 0;
     float temp_logmatch[MAX_SUPERREADS*MAX_MATRIX_WIDTH];
     float temp_logmismatch[MAX_SUPERREADS*MAX_MATRIX_WIDTH];
     for(int i=0;i<n;++i){
-      assert(i<MAX_SUPERREADS);
+      //assert(i<MAX_SUPERREADS);
+      if (i==MAX_SUPERREADS) {
+        cerr<<"WARNING: A total of "<<n<<" super reads were encountered at this position "<<genomic_pos<<", exceeding the max allocation of "<<MAX_SUPERREADS<<". Consider increasing the MAX_SUPERREADS value.\n";
+        throw "Read parser error";
+        break;
+      }
       uint current_genomic_pos = genomic_pos;
       const bam1_t * bam = pl[i].b;
       char * name = bam1_qname(bam); 
@@ -174,47 +174,34 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
           mesg_x1 = bam_aux2Z(x1);
           int mesg_len = mesg_x1.length();
           plval.depths[i] = mesg_len/2;
-          if (plval.depths[i]>MAX_SUBREADS){
-  //        if (parser->depth[parser->matrix_rows]>MAX_SUBREADS){
-            cerr<<"A read depth of "<<plval.depths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_SUBREADS<<". Consider increasing the MAX_SUBREADS value.\n";
-            throw "Read parser error";
-          }
-          //parser->depth[parser->matrix_rows] = mesg_len/2;
-          //for(int i=0;i<mesg_len/2;){
-            //string element = mesg_x1.substr(i*2,2);
-            //parser->map_quality[parser->matrix_rows][i] = ReadParser::hex2int(element);
-            //++i;
-            //if (i==MAX_SUPERREADS) break;
+          //if (plval.depths[i]>MAX_SUBREADS){
+            //cerr<<"WARNING: A read depth of "<<plval.depths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_SUBREADS<<". Consider increasing the MAX_SUBREADS value.\n";
+            //throw "Read parser error";
           //}
-          //plval.mapqual_str[i] = mesg_x1;
         }
         uint8_t * y1 = bam_aux_get(bam,"y1");
         if (y1){
           mesg_y1 = bam_aux2Z(y1);
-          //plval.basequal_str[i] = mesg_y1;
           int mesg_len = mesg_y1.length();
           plval.lengths[i] = mesg_len/(2*plval.depths[i]);
-          if (plval.lengths[i]>MAX_MATRIX_WIDTH){
-  //        if (parser->depth[parser->matrix_rows]>MAX_SUBREADS){
-            cerr<<"A read length of "<<plval.lengths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_MATRIX_WIDTH<<". Consider increasing the MAX_MATRIX_WIDTH value.\n";
-            throw "Read parser error";
-          }
-          ////parser->read_len[parser->matrix_rows] = mesg_len/(2*parser->depth[parser->matrix_rows]);
+          //if (plval.lengths[i]>MAX_MATRIX_WIDTH){
+            //cerr<<"WARNING: A read length of "<<plval.lengths[i]<<" was encountered for super read "<<i<<", exceeding the max allocation of "<<MAX_MATRIX_WIDTH<<". Consider increasing the MAX_MATRIX_WIDTH value.\n";
+            //throw "Read parser error";
+          //}
           for(int k=0;k<plval.lengths[i];++k){
-            //plval.logmatch_qualities[i*MAX_MATRIX_WIDTH+k] = 0;
-            //plval.logmismatch_qualities[i*MAX_MATRIX_WIDTH+k] = 0;
-            temp_logmatch[i*MAX_MATRIX_WIDTH+k] = 0;
-            temp_logmismatch[i*MAX_MATRIX_WIDTH+k] = 0;
+            if (k<MAX_MATRIX_WIDTH){
+              temp_logmatch[i*MAX_MATRIX_WIDTH+k] = 0;
+              temp_logmismatch[i*MAX_MATRIX_WIDTH+k] = 0;
+            }
           }
           int stroffset = 0;
           for(int j=0;j<plval.depths[i];++j){
-          //for(int i=0;i<parser->depth[parser->matrix_rows];++i){
             for(int k=0;k<plval.lengths[i];++k){
               string element = mesg_y1.substr(stroffset,2);
-              //plval.logmatch_qualities[i*MAX_MATRIX_WIDTH+k] += logprob_match_lookup[hex2int(element)];
-              //plval.logmismatch_qualities[i*MAX_MATRIX_WIDTH+k] += logprob_mismatch_lookup[hex2int(element)];
-              temp_logmatch[i*MAX_MATRIX_WIDTH+k] += logprob_match_lookup[hex2int(element)];
-              temp_logmismatch[i*MAX_MATRIX_WIDTH+k] += logprob_mismatch_lookup[hex2int(element)];
+              if (k<MAX_MATRIX_WIDTH){
+                temp_logmatch[i*MAX_MATRIX_WIDTH+k] += logprob_match_lookup[hex2int(element)];
+                temp_logmismatch[i*MAX_MATRIX_WIDTH+k] += logprob_mismatch_lookup[hex2int(element)];
+              }
               stroffset += 2;
             }
           }
@@ -242,9 +229,9 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
           if (debug) cerr<<"  At cursor: "<<cursor<<endl;
           if (debug) cerr<<"  Current cigar len "<<c1<<" of type ";
           if (cop==BAM_CMATCH ){
-            assert(cursor<MAX_MATRIX_WIDTH);
-            string read_substr(seq_str,cursor,1);
-            if(vectorized_col<MAX_VECTOR_LENGTH){
+            //assert(cursor<MAX_MATRIX_WIDTH);
+            string read_substr(seq_str,cursor,1); // read character at cursor
+            if(cursor<MAX_MATRIX_WIDTH && vectorized_col<MAX_VECTOR_LENGTH){
               if (read_substr.compare("=")==0){
                 if (debug) cerr<<" MATCH\n";
                 //plval.alleles[i*MAX_MATRIX_WIDTH + cursor] = 0;
@@ -262,15 +249,14 @@ int ReadParser::pileup_func(uint32_t tid, uint32_t querypos, int n, const bam_pi
               plval.logmismatch_qualities_compact[vectorized_col] = 
               temp_logmismatch[i*MAX_MATRIX_WIDTH+cursor];
               if (debug) cerr<<"  Inserted "<< plval.alleles_compact[vectorized_col]<<" into row "<<i<<" and col "<<cursor<<endl;
+              ++vectorized_col;
             }
-            ++vectorized_col;
             current_genomic_pos+=c1;
             position_set.insert(current_genomic_pos);
             ++cursor;
           }else if (cop==BAM_CPAD){
             if (debug) cerr<<" CPAD\n";
             current_genomic_pos+=c1;
-            //++cursor;
           }
           if (debug) cerr<<"  Genomic position is now "<<current_genomic_pos<<endl;
         }
@@ -616,7 +602,7 @@ void ReadParser::extract_region(int subject,int offset,int snps,bool populate_ma
     if(subject==test_subject ) cerr<<"Matrix row,col is now "<<matrix_rows<<","<<cursor<<endl;
   }
   if (populate_matrix){
-    //cerr<<" clear out things from "<<last_left_marker<<" onwards\n";
+    cerr<<" clear out things from "<<last_left_marker<<" onwards to "<<offset<<"\n";
     for(int snpindex=last_left_marker;snpindex<offset;++snpindex){
       //cerr<<"In deleter of subject "<<subject<<" and snpindex "<<snpindex<<"\n";
       pileup_key_t key;
@@ -729,28 +715,49 @@ void ReadParser::init(const char * bam_filename,const char * pos_filename){
   depth = new int[MAX_SUPERREADS];
   read_len = new int[MAX_SUPERREADS];
   map_quality = new int * [MAX_SUPERREADS];
-  //base_quality = new int ** [MAX_SUPERREADS];
   logmatch_quality = new float * [MAX_SUPERREADS];
   logmismatch_quality = new float * [MAX_SUPERREADS];
   for(int i=0;i<MAX_SUPERREADS;++i){
     logmatch_quality[i] = new float[MAX_MATRIX_WIDTH];
     logmismatch_quality[i] = new float[MAX_MATRIX_WIDTH];
     map_quality[i] = new int[MAX_SUBREADS];
-    //base_quality[i] = new int * [MAX_SUBREADS];
-    //for(int j=0;j<MAX_SUBREADS;++j){
-      //base_quality[i][j] = new int[MAX_MATRIX_WIDTH];
-    //}
   }
   matrix_alleles = new int[MAX_MATRIX_WIDTH*MAX_SUPERREADS];
+  last_left_marker = 0;
   return;
 }
 
 ReadParser::~ReadParser(){
+  if (idx!=0){
+    cerr<<"Freeing idx object\n";
+    bam_index_destroy(idx);
+  }
+  cerr<<"Freeing buf object\n";
   bam_plbuf_destroy(buf);
-  bam_index_destroy(idx);
+  cerr<<"Closing tmp->in\n";
   samclose(tmp->in);
+  cerr<<"Freeing tmp\n";
   delete tmp;
-  //cerr<<"Destructed\n";
+  delete[] offset;
+  delete[] depth;
+  delete[] read_len;
+  for(int i=0;i<MAX_SUPERREADS;++i){
+    delete[] logmatch_quality[i];
+    delete[] logmismatch_quality[i];
+    delete[] map_quality[i];
+  }
+  delete[] logmatch_quality;
+  delete[] logmismatch_quality;
+  delete[] map_quality;
+  delete[] matrix_alleles;
+}
+
+int ReadParser::get_total_depth(){
+  int totaldepth = 0;
+  for(uint i=0;i<matrix_rows;++i){
+    totaldepth+=depth[i];
+  }
+  return totaldepth;
 }
 
 void ReadParser::print_data(){
