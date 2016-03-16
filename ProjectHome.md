@@ -1,0 +1,1 @@
+This program uses OpenCL kernels to rapidly impute genotypes using linkage disequilibrium patterns in unrelated subjects.  It is appropriate for resequencing data.
